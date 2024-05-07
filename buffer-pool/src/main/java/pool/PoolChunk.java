@@ -13,7 +13,9 @@ final public class PoolChunk<T> implements Chunk {
 
     private static final int SUBPAGE_BIT_LENGTH = 1;
 
-    private static final int IS_SUBPAGE_SHIFT = 1;
+    private static final int BITMAP_IDX_BIT_LENGTH = 32;
+
+    static final int IS_SUBPAGE_SHIFT = BITMAP_IDX_BIT_LENGTH;
 
     private static final int INUSED_BIT_LENGTH = 1;
     private static final int IS_USED_SHIFT = SUBPAGE_BIT_LENGTH + IS_SUBPAGE_SHIFT;
@@ -217,7 +219,7 @@ final public class PoolChunk<T> implements Chunk {
     }
 
     private int runPages(long handle) {
-        return (int) handle >> SIZE_SHIFT & 0x7fff;
+        return (int) (handle >> SIZE_SHIFT & 0x7fff);
     }
 
     private int runSize(int pageShifts, long handle) {

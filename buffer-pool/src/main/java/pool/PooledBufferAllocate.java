@@ -236,44 +236,6 @@ public class PooledBufferAllocate implements BufferAllocate {
         return new PoolArena[nDirectArena];
     }
 
-    protected synchronized ThreadLocalCache initialValue() {
-        // 获取当前最少使用的heapArena和directArena
-        final PoolArena<ByteBuffer> directArena = leastUsedArena(directArenas);
-        // 获取当前线程和与其关联的执行器
-        final Thread current = Thread.currentThread();
-        final ThreadLocalCache cache = new ThreadLocalCache(directArena, smallCacheSize, normalCacheSize,
-                DEFAULT_MAX_CACHED_BUFFER_CAPACITY, DEFAULT_CACHE_TRIM_INTERVAL);
-        return cache;
-    }
-
-    private <T> PoolArena<T> leastUsedArena(PoolArena<T>[] arenas) {
-        // 检查输入是否为空，如果是则直接返回null
-        if (arenas == null || arenas.length == 0) {
-            return null;
-        }
-
-        // 初始化为第一个arena，将其作为当前最小使用率的arena
-        PoolArena<T> minArena = arenas[0];
-
-        // 优化：如果这是第一次执行，并且minArena没有被使用过（即其线程缓存数为未使用标志），则直接返回minArena
-        // 这样可以减少下面for循环中的比较次数
-        if (minArena.numThreadCaches.get() == CACHE_NOT_USED) {
-            return minArena;
-        }
-
-        // 遍历剩余的arena，查找并记录使用最少的arena
-        for (int i = 1; i < arenas.length; i++) {
-            PoolArena<T> arena = arenas[i];
-            // 如果当前arena的线程缓存数少于minArena的线程缓存数，则更新minArena为当前arena
-            if (arena.numThreadCaches.get() < minArena.numThreadCaches.get()) {
-                minArena = arena;
-            }
-        }
-
-        // 返回使用最少的arena
-        return minArena;
-    }
-
     public ByteBuf allocate() {
         return this.handle.allocate();
     }
@@ -286,7 +248,7 @@ public class PooledBufferAllocate implements BufferAllocate {
         return newDirectBuffer(initialCapacity, maxCapacity);
     }
 
-    protected ByteBuf newDirectBuffer(int initialCapacity, int maxCapacity) {
+    public ByteBuf newDirectBuffer(int initialCapacity, int maxCapacity) {
         // 本地线程缓存
         ThreadLocalCache cache = threadCache.get();
         // 缓冲池

@@ -65,7 +65,7 @@ public class ThreadLocalCache {
     }
 
 
-    public Boolean allocateNormal(PoolArena area, PooledByteBuf<?> buf, int reqCapacity, int sizeIdx) {
+    public boolean allocateNormal(PoolArena area, PooledByteBuf buf, int sizeIdx) {
         // 调整大小索引，以区分小页池之外的索引，主要用于计算在特定内存类型中的实际索引位置。
         int idx = sizeIdx - area.numSmallSubpagePools;
         // 如果区域设置为直接内存，则从直接内存缓存数组中获取缓存。
@@ -76,7 +76,7 @@ public class ThreadLocalCache {
     /**
      * Cache used for buffers which are backed by NORMAL size.
      */
-    private static final class NormalMemoryRegionCache<T> extends MemoryRegionCache<T> {
+    public static final class NormalMemoryRegionCache<T> extends MemoryRegionCache<T> {
         NormalMemoryRegionCache(int size) {
             super(size, SizeClass.Normal);
         }
@@ -125,8 +125,11 @@ public class ThreadLocalCache {
         cache.trim();
     }
 
-    private <T> MemoryRegionCache<T> cache(MemoryRegionCache<T>[] normalDirectCaches, int idx) {
-        return normalDirectCaches[idx];
+    private <T> MemoryRegionCache<T> cache(MemoryRegionCache<T>[] cache, int idx) {
+        if (cache == null || idx > cache.length - 1) {
+            return null;
+        }
+        return cache[idx];
     }
 
     static final class Entry<T> {
@@ -148,7 +151,7 @@ public class ThreadLocalCache {
         }
     }
 
-    private abstract static class MemoryRegionCache<T> {
+    public abstract static class MemoryRegionCache<T> {
 
         private final int size;
         private final Queue<Entry<T>> queue;
@@ -232,7 +235,7 @@ public class ThreadLocalCache {
         }
     }
 
-    private static final class SubPageMemoryRegionCache<T> extends MemoryRegionCache<T> {
+    public static final class SubPageMemoryRegionCache<T> extends MemoryRegionCache<T> {
 
 
         SubPageMemoryRegionCache(int size) {

@@ -45,7 +45,7 @@ public class PooledByteBuf<T> implements ByteBuf {
         this.maxCapacity = maxCapacity;
     }
 
-    void recycle() {
+    public void recycle() {
         recyclerHandle.recycle(this);
     }
 

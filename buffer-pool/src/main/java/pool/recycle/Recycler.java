@@ -104,7 +104,7 @@ public abstract class Recycler<T> {
         LocalPool<T> localPool = threadLocal.get();
         if (localPool == null) {
             localPool = new LocalPool<>();
-            threadLocal.set(new LocalPool<>());
+            threadLocal.set(localPool);
         }
         // 认领可用的handle
         DefaultHandle<T> handle = localPool.claim();

@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class PoolArena<T> extends SizeClasses {
 
-    public AtomicInteger numThreadCaches;
+    public AtomicInteger numThreadCaches = new AtomicInteger();
 
     private int deallocationsNormal;
     private int deallocationsSmall;
@@ -32,6 +32,7 @@ public class PoolArena<T> extends SizeClasses {
     public PoolArena(int pageSize, int pageShifts, int chunkSize, int cacheAlignment) {
         super(pageSize, pageShifts, chunkSize, cacheAlignment);
         this.nPSizes = 40;
+        numSmallSubpagePools = nSubpages;
         smallSubpagePools = newSubpagePoolArray(nSubpages);
     }
 
@@ -72,7 +73,7 @@ public class PoolArena<T> extends SizeClasses {
     }
 
     private void allocateNormal(ThreadLocalCache cache, PooledByteBuf<T> buf, int reqCapacity, int sizeIdx) {
-        if (cache.allocateNormal(this, buf, reqCapacity, sizeIdx)) {
+        if (cache.allocateNormal(this, buf, sizeIdx)) {
             return;
         }
         // Add a new chunk.
