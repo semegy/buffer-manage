@@ -1,5 +1,7 @@
 package pool;
 
+import pool.recycle.ThreadLocalCache;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -31,8 +33,11 @@ final public class PoolChunk<T> implements Chunk {
     private final int pageShifts;
 
     private final int chunkSize;
+    public PoolArena arena;
 
-    private int freeBytes;
+    PoolChunkList<T> parent;
+
+    int freeBytes;
 
     // todo 默认chunk 分区 16M， 后面拓展改造
     private static int DEFAULT_MAX_CHUNK_SIZE = 1024 * 1024 * 16;
@@ -55,12 +60,14 @@ final public class PoolChunk<T> implements Chunk {
      */
     private final LongPriorityQueue[] runsAvail;
 
-    final PoolArena<T> arena;
-
     /**
      * store the first page and last page of each avail run
      */
     private final LongLongHashMap runsAvailMap;
+
+    public PoolChunk<T> next;
+
+    PoolChunk<T> prev;
 
     // Use as cache for ByteBuffer created from the memory. These are just duplicates and so are only a container
     // around the memory itself. These are often needed for operations within the Pooled*ByteBuf and so
@@ -68,6 +75,7 @@ final public class PoolChunk<T> implements Chunk {
     //
     // This may be null if the PoolChunk is unpooled as pooling the ByteBuffer instances does not make any sense here.
     private final Deque<ByteBuffer> cachedNioBuffers;
+
     public PoolChunk(PoolArena arena, T memory) {
         this.arena = arena;
         this.memory = memory;
@@ -114,16 +122,16 @@ final public class PoolChunk<T> implements Chunk {
         return ByteBuffer.allocateDirect(capacity);
     }
 
-    private void allocateNormal(PoolThreadCache cache, PooledByteBuf<ByteBuffer> buf, int reqCapacity, int sizeIdx) {
+    private void allocateNormal(PooledByteBuf<ByteBuffer> buf, int reqCapacity, int sizeIdx) {
 
         // todo 从队列中获取去chunk
 
         // add a new chunk
         PoolChunk<ByteBuffer> chunk = new PoolChunk<>(null, allocateDirect(chunkSize));
-        chunk.allocate(buf, reqCapacity, sizeIdx, cache);
+        chunk.allocate(buf, reqCapacity, sizeIdx);
     }
 
-    public boolean allocate(PooledByteBuf<T> buf, int reqCapacity, int sizeIdx, PoolThreadCache cache) {
+    public boolean allocate(PooledByteBuf<T> buf, int reqCapacity, int sizeIdx) {
         // todo subpage 子页分配
 
         // 超出子页大小的 normal分配机制
@@ -137,12 +145,11 @@ final public class PoolChunk<T> implements Chunk {
         // todo handle规范检查
 //        assert !isSubpage(handle);
         ByteBuffer nioBuffer = cachedNioBuffers != null ? cachedNioBuffers.pollLast() : null;
-        initBuf(buf, nioBuffer, handle, reqCapacity, cache);
+        initBuf(buf, nioBuffer, handle, reqCapacity, null);
         return true;
     }
 
-    void initBuf(PooledByteBuf<T> buf, ByteBuffer nioBuffer, long handle, int reqCapacity,
-                 PoolThreadCache threadCache) {
+    public void initBuf(PooledByteBuf<T> buf, ByteBuffer nioBuffer, long handle, int reqCapacity, ThreadLocalCache threadCache) {
         int maxLength = runSize(pageShifts, handle);
         buf.init(this, nioBuffer, handle, runOffset(handle) << pageShifts,
                 reqCapacity, maxLength);
@@ -165,7 +172,7 @@ final public class PoolChunk<T> implements Chunk {
                     removeAvailRun(queue, handle);
                     if (handle != -1) {
                         // 拆分run
-                       handle = splitLargeRun(handle, pages);
+                        handle = splitLargeRun(handle, pages);
                     }
                     // 偏移量
                     int pinnedSize = runSize(pageShifts, handle);
@@ -270,5 +277,111 @@ final public class PoolChunk<T> implements Chunk {
     public void incrementPinnedMemory(int maxLength) {
 //        assert delta > 0;
 //        pinnedBytes.add(delta);
+    }
+
+    public void free(long handle, int normCapacity, ByteBuffer nioBuffer) {
+        int runSize = runSize(pageShifts, handle);
+//        if (isSubpage(handle)) {
+//            int sizeIdx = arena.size2SizeIdx(normCapacity);
+//            PoolSubpage<T> head = arena.findSubpagePoolHead(sizeIdx);
+//
+//            int sIdx = runOffset(handle);
+//            PoolSubpage<T> subpage = subpages[sIdx];
+//            assert subpage != null && subpage.doNotDestroy;
+//
+//            // Obtain the head of the PoolSubPage pool that is owned by the PoolArena and synchronize on it.
+//            // This is need as we may add it back and so alter the linked-list structure.
+//            synchronized (head) {
+//                if (subpage.free(head, bitmapIdx(handle))) {
+//                    //the subpage is still used, do not free it
+//                    return;
+//                }
+//                assert !subpage.doNotDestroy;
+//                // Null out slot in the array as it was freed and we should not use it anymore.
+//                subpages[sIdx] = null;
+//            }
+//        }
+
+        //start free run
+        synchronized (runsAvail) {
+            // collapse continuous runs, successfully collapsed runs
+            // will be removed from runsAvail and runsAvailMap
+            long finalRun = collapseRuns(handle);
+
+            //set run as not used
+            finalRun &= ~(1L << IS_USED_SHIFT);
+            //if it is a subpage, set it to run
+            finalRun &= ~(1L << IS_SUBPAGE_SHIFT);
+
+            insertAvailRun(runOffset(finalRun), runPages(finalRun), finalRun);
+            freeBytes += runSize;
+        }
+
+        if (nioBuffer != null && cachedNioBuffers != null &&
+                cachedNioBuffers.size() < PooledBufferAllocate.DEFAULT_MAX_CACHED_BYTEBUFFERS_PER_CHUNK) {
+            cachedNioBuffers.offer(nioBuffer);
+        }
+    }
+
+    private long collapseRuns(long handle) {
+        return collapseNext(collapsePast(handle));
+    }
+
+    private long collapsePast(long handle) {
+        for (; ; ) {
+            int runOffset = runOffset(handle);
+            int runPages = runPages(handle);
+
+            long pastRun = getAvailRunByOffset(runOffset - 1);
+            if (pastRun == -1) {
+                return handle;
+            }
+
+            int pastOffset = runOffset(pastRun);
+            int pastPages = runPages(pastRun);
+
+            //is continuous
+            if (pastRun != handle && pastOffset + pastPages == runOffset) {
+                //remove past run
+                removeAvailRun(pastRun);
+                handle = toRunHandle(pastOffset, pastPages + runPages, 0);
+            } else {
+                return handle;
+            }
+        }
+    }
+
+    private void removeAvailRun(long handle) {
+        int pageIdxFloor = arena.pages2pageIdxFloor(runPages(handle));
+        LongPriorityQueue queue = runsAvail[pageIdxFloor];
+        removeAvailRun(queue, handle);
+    }
+
+    private long collapseNext(long handle) {
+        for (; ; ) {
+            int runOffset = runOffset(handle);
+            int runPages = runPages(handle);
+
+            long nextRun = getAvailRunByOffset(runOffset + runPages);
+            if (nextRun == -1) {
+                return handle;
+            }
+
+            int nextOffset = runOffset(nextRun);
+            int nextPages = runPages(nextRun);
+
+            //is continuous
+            if (nextRun != handle && runOffset + runPages == nextOffset) {
+                //remove next run
+                removeAvailRun(nextRun);
+                handle = toRunHandle(runOffset, runPages + nextPages, 0);
+            } else {
+                return handle;
+            }
+        }
+    }
+
+    private long getAvailRunByOffset(int runOffset) {
+        return runsAvailMap.get(runOffset);
     }
 }

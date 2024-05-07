@@ -94,4 +94,20 @@ public class LongLongHashMap {
             }
         }
     }
+
+    public long get(long key) {
+        if (key == 0) {
+            return zeroVal;
+        }
+        int index = index(key);
+        // 遍历冲突链表
+        for (int i = 0; i < maxProbe; i++) {
+            long existing = array[index];
+            if (existing == key) {
+                return array[index + 1];
+            }
+            index = index + 2 & mask;
+        }
+        return emptyVal;
+    }
 }

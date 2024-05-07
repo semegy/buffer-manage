@@ -1,6 +1,6 @@
 package pool;
 
-public abstract class SizeClasses implements SizeClassesMetric{
+public abstract class SizeClasses implements SizeClassesMetric {
 
     static final int LOG2_QUANTUM = 4;
 
@@ -19,11 +19,11 @@ public abstract class SizeClasses implements SizeClassesMetric{
 
     protected final int pageSize;
     protected final int pageShifts;
-    protected final int chunkSize;
+    public final int chunkSize;
     protected final int directMemoryCacheAlignment;
     protected static final int INTEGER_SIZE_MINUS_ONE = Integer.SIZE - 1;
 
-    final int nSizes;
+    public final int nSizes;
     final int nSubpages;
     final int nPSizes;
     final int lookupMaxSize;
@@ -36,9 +36,11 @@ public abstract class SizeClasses implements SizeClassesMetric{
     // lookup table used for size <= lookupMaxClass
     // spacing is 1 << LOG2_QUANTUM, so the size of array is lookupMaxClass >> LOG2_QUANTUM
     private final int[] size2idxTab;
+
     static int log2(int val) {
         return INTEGER_SIZE_MINUS_ONE - Integer.numberOfLeadingZeros(val);
     }
+
     protected SizeClasses(int pageSize, int pageShifts, int chunkSize, int directMemoryCacheAlignment) {
         int group = log2(chunkSize) + 1 - LOG2_QUANTUM;
 
@@ -121,25 +123,25 @@ public abstract class SizeClasses implements SizeClassesMetric{
             int pageSize = 1 << pageShifts;
             int size = calculateSize(log2Group, nDelta, log2Delta);
 
-            isMultiPageSize = size == size / pageSize * pageSize? yes : no;
+            isMultiPageSize = size == size / pageSize * pageSize ? yes : no;
         }
 
-        int log2Ndelta = nDelta == 0? 0 : log2(nDelta);
+        int log2Ndelta = nDelta == 0 ? 0 : log2(nDelta);
 
-        byte remove = 1 << log2Ndelta < nDelta? yes : no;
+        byte remove = 1 << log2Ndelta < nDelta ? yes : no;
 
-        int log2Size = log2Delta + log2Ndelta == log2Group? log2Group + 1 : log2Group;
+        int log2Size = log2Delta + log2Ndelta == log2Group ? log2Group + 1 : log2Group;
         if (log2Size == log2Group) {
             remove = yes;
         }
 
-        short isSubpage = log2Size < pageShifts + LOG2_SIZE_CLASS_GROUP? yes : no;
+        short isSubpage = log2Size < pageShifts + LOG2_SIZE_CLASS_GROUP ? yes : no;
 
         int log2DeltaLookup = log2Size < LOG2_MAX_LOOKUP_SIZE ||
                 log2Size == LOG2_MAX_LOOKUP_SIZE && remove == no
                 ? log2Delta : no;
 
-        return new short[] {
+        return new short[]{
                 (short) index, (short) log2Group, (short) log2Delta,
                 (short) nDelta, isMultiPageSize, isSubpage, (short) log2DeltaLookup
         };
@@ -209,10 +211,10 @@ public abstract class SizeClasses implements SizeClassesMetric{
         int group = sizeIdx >> LOG2_SIZE_CLASS_GROUP;
         int mod = sizeIdx & (1 << LOG2_SIZE_CLASS_GROUP) - 1;
 
-        int groupSize = group == 0? 0 :
+        int groupSize = group == 0 ? 0 :
                 1 << LOG2_QUANTUM + LOG2_SIZE_CLASS_GROUP - 1 << group;
 
-        int shift = group == 0? 1 : group;
+        int shift = group == 0 ? 1 : group;
         int lgDelta = shift + LOG2_QUANTUM - 1;
         int modSize = mod + 1 << lgDelta;
 
@@ -229,10 +231,10 @@ public abstract class SizeClasses implements SizeClassesMetric{
         int group = pageIdx >> LOG2_SIZE_CLASS_GROUP;
         int mod = pageIdx & (1 << LOG2_SIZE_CLASS_GROUP) - 1;
 
-        long groupSize = group == 0? 0 :
+        long groupSize = group == 0 ? 0 :
                 1L << pageShifts + LOG2_SIZE_CLASS_GROUP - 1 << group;
 
-        int shift = group == 0? 1 : group;
+        int shift = group == 0 ? 1 : group;
         int log2Delta = shift + pageShifts - 1;
         int modSize = mod + 1 << log2Delta;
 
@@ -295,7 +297,7 @@ public abstract class SizeClasses implements SizeClassesMetric{
 
         int group = shift << LOG2_SIZE_CLASS_GROUP;
 
-        int log2Delta = x < LOG2_SIZE_CLASS_GROUP + pageShifts + 1?
+        int log2Delta = x < LOG2_SIZE_CLASS_GROUP + pageShifts + 1 ?
                 pageShifts : x - LOG2_SIZE_CLASS_GROUP - 1;
 
         int deltaInverseMask = -1 << log2Delta;
@@ -312,10 +314,11 @@ public abstract class SizeClasses implements SizeClassesMetric{
     }
 
     // Round size up to the nearest multiple of alignment.
+
     /**
      * 将大小向上调整到最接近对齐的倍数。
      *
-     * @param size 原始大小，需要进行对齐调整的。
+     * @param size                       原始大小，需要进行对齐调整的。
      * @param directMemoryCacheAlignment 对齐的倍数，如果小于等于0，则不进行对齐调整。
      * @return 调整后的大小。如果原始大小已经是对齐倍数的整数倍，则返回原始大小；否则返回调整后的大小。
      */
@@ -327,7 +330,7 @@ public abstract class SizeClasses implements SizeClassesMetric{
         // 计算原始大小与对齐倍数的模，即大小与对齐倍数之间的差值
         int delta = size & directMemoryCacheAlignment - 1;
         // 如果差值为0，表示原始大小已经是对齐倍数的整数倍，直接返回原始大小；否则调整大小使其成为对齐倍数的整数倍
-        return delta == 0? size : size + directMemoryCacheAlignment - delta;
+        return delta == 0 ? size : size + directMemoryCacheAlignment - delta;
     }
 
     @Override

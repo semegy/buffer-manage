@@ -33,6 +33,7 @@ public class PoolSubpage<T> {
         runSize = -1;
         bitmap = null;
     }
+
     PoolSubpage(PoolSubpage<T> head, PoolChunk<T> chunk, int pageShifts, int runOffset, int runSize, int elemSize) {
         this.chunk = chunk;
         this.pageShifts = pageShifts;

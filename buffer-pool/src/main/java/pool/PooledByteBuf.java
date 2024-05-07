@@ -1,14 +1,25 @@
 package pool;
 
+import pool.recycle.Recycler;
+
 import java.nio.ByteBuffer;
 
-public class PooledByteBuf<T> {
+public class PooledByteBuf<T> implements ByteBuf {
 
     private PoolChunk<T> chunk;
+
+
+    private final Recycler.Handle<PooledByteBuf<T>> recyclerHandle;
     private long handle;
     private int offset;
     private int length;
     private int maxLength;
+
+    private int maxCapacity;
+
+    public PooledByteBuf(Recycler.Handle recyclerHandle) {
+        this.recyclerHandle = recyclerHandle;
+    }
 
     void init(PoolChunk<T> chunk, ByteBuffer nioBuffer,
               long handle, int offset, int length, int maxLength) {
@@ -28,4 +39,14 @@ public class PooledByteBuf<T> {
         this.length = length;
         this.maxLength = maxLength;
     }
+
+    @Override
+    public void reused(int maxCapacity) {
+        this.maxCapacity = maxCapacity;
+    }
+
+    void recycle() {
+        recyclerHandle.recycle(this);
+    }
+
 }

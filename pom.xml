@@ -23,6 +23,11 @@
             <artifactId>mockito-core</artifactId>
             <version>4.9.0</version> <!-- 或您希望使用的最新版本 -->
         </dependency>
+        <dependency>
+            <artifactId>jctools-core</artifactId>
+            <groupId>org.jctools</groupId>
+            <version>3.1.0</version>
+        </dependency>
     </dependencies>
 
 </project>
