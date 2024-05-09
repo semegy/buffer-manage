@@ -27,13 +27,8 @@ public class PoolArenaTest {
             // 测试 allocate 方法的行为
             ByteBuf allocatedBuffer = bufferAllocate.newDirectBuffer(reqCapacity, maxCapacity);
             PooledByteBuf p = (PooledByteBuf)allocatedBuffer;
-            p.recycle();
+            p.deallocate();
         }
-
-
-        // 校验返回的 PooledByteBuf 不为空
-//        assertNotNull("Allocated buffer should not be null", allocatedBuffer);
-        // 这里添加更多校验来确认 allocatedBuffer 的状态是否符合预期
     }
 
 }

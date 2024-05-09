@@ -73,6 +73,15 @@ public class ThreadLocalCache {
         return allocate(cache, buf, idx);
     }
 
+    public <T> boolean add(PoolArena arena, PoolChunk<T> chunk, ByteBuffer nioBuffer, long handle, int normCapacity, SizeClass sizeClass) {
+        int sizeIdx = arena.size2SizeIdx(normCapacity);
+        MemoryRegionCache<?> cache = cache(arena, sizeIdx, sizeClass);
+        if (cache == null) {
+            return false;
+        }
+        return cache.add(chunk, nioBuffer, handle, normCapacity);
+    }
+
     /**
      * Cache used for buffers which are backed by NORMAL size.
      */
@@ -130,6 +139,24 @@ public class ThreadLocalCache {
             return null;
         }
         return cache[idx];
+    }
+
+    private MemoryRegionCache<?> cache(PoolArena<?> area, int sizeIdx, SizeClass sizeClass) {
+        switch (sizeClass) {
+            case Normal:
+                return cacheForNormal(area, sizeIdx);
+            case Small:
+//                return cacheForSmall(area, sizeIdx);
+            default:
+                throw new Error();
+        }
+    }
+
+    private MemoryRegionCache<?> cacheForNormal(PoolArena<?> area, int sizeIdx) {
+        // 调整大小索引，以区分小页池之外的索引，主要用于计算在特定内存类型中的实际索引位置。
+        int idx = sizeIdx - area.numSmallSubpagePools;
+        // 如果区域设置为直接内存，则从直接内存缓存数组中获取缓存。
+        return cache(normalDirectCaches, idx);
     }
 
     static final class Entry<T> {
@@ -233,6 +260,34 @@ public class ThreadLocalCache {
 
             chunk.arena.freeChunk(chunk, handle, normCapacity, sizeClass, nioBuffer, finalizer);
         }
+        public final boolean add(PoolChunk<?> chunk, ByteBuffer nioBuffer, long handle, int normCapacity) {
+            Entry<T> entry = newEntry(chunk, nioBuffer, handle, normCapacity);
+            boolean queued = queue.offer(entry);
+            if (!queued) {
+                // 添加已满 entry
+                // If it was not possible to cache the chunk, immediately recycle the entry
+                entry.recycle();
+            }
+            return queued;
+        }
+
+        @SuppressWarnings("rawtypes")
+        private static Entry newEntry(PoolChunk<?> chunk, ByteBuffer nioBuffer, long handle, int normCapacity) {
+            Entry entry = RECYCLER.get();
+            entry.chunk = chunk;
+            entry.nioBuffer = nioBuffer;
+            entry.handle = handle;
+            entry.normCapacity = normCapacity;
+            return entry;
+        }
+
+        @SuppressWarnings("rawtypes")
+        private static final Recycler<Entry> RECYCLER = new Recycler<Entry>() {
+            @Override
+            protected Entry newObject(Handle handle) {
+                return new Entry(handle);
+            }
+        };
     }
 
     public static final class SubPageMemoryRegionCache<T> extends MemoryRegionCache<T> {

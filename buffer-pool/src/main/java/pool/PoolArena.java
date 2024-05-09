@@ -6,12 +6,27 @@ import pool.recycle.ThreadLocalCache;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static pool.PoolChunk.isSubpage;
+
 public class PoolArena<T> extends SizeClasses {
 
     public AtomicInteger numThreadCaches = new AtomicInteger();
 
     private int deallocationsNormal;
     private int deallocationsSmall;
+
+    public <T> void free(PoolChunk<T> chunk, ByteBuffer nioBuffer, long handle, int normCapacity, ThreadLocalCache cache) {
+        SizeClass sizeClass = sizeClass(handle);
+        if (cache != null && cache.add(this, chunk, nioBuffer, handle, normCapacity, sizeClass)) {
+            return;
+        }
+        // 释放chunk空间
+        freeChunk(chunk, handle, normCapacity, sizeClass, nioBuffer, false);
+    }
+
+    private SizeClass sizeClass(long handle) {
+        return isSubpage(handle) ? SizeClass.Small : SizeClass.Normal;
+    }
 
     public enum SizeClass {
         Small,
@@ -52,16 +67,15 @@ public class PoolArena<T> extends SizeClasses {
     }
 
     public ByteBuf allocate(ThreadLocalCache cache, int reqCapacity, int maxCapacity) {
-        // 先从缓存池中获取到合适大小的ByteBuf
+        // 先从缓存池中获取到合适容量的PooledByteBuf, 没有则创建新的buf
         PooledByteBuf<T> buf = newInstance(maxCapacity);
-        // 从cache中找到合适的分区分配内存
+        // buf分配空间
         allocate(cache, buf, reqCapacity);
         return buf;
     }
 
     private void allocate(ThreadLocalCache cache, PooledByteBuf<T> buf, int reqCapacity) {
-        // 从cache中找到合适的分区分配内存
-        // 原理 根据请求的空间大找到合适sizeIdx （寻址索引）
+        // 原理 根据请求的空间大小找到合适sizeIdx （寻址索引）
         final int sizeIdx = size2SizeIdx(reqCapacity);
         allocateNormal(cache, buf, reqCapacity, sizeIdx);
     }
@@ -79,7 +93,7 @@ public class PoolArena<T> extends SizeClasses {
         // Add a new chunk.
         ByteBuffer memory = ByteBuffer.allocateDirect(reqCapacity);
         PoolChunk poolChunk = newChunk(this, memory);
-        poolChunk.allocate(buf, reqCapacity, sizeIdx);
+        poolChunk.allocate(buf, reqCapacity, sizeIdx, cache);
     }
 
     PoolChunk<ByteBuffer> newChunk(PoolArena arena, ByteBuffer memory) {
@@ -104,14 +118,16 @@ public class PoolArena<T> extends SizeClasses {
                 }
             }
             // 销毁chunk?
-            destroyChunk = !chunk.parent.free(chunk, handle, normCapacity, nioBuffer);
+//            destroyChunk = !chunk.parent.free(chunk, handle, normCapacity, nioBuffer);
         }
-        if (destroyChunk) {
-            // destroyChunk not need to be called while holding the synchronized lock.
-            // 销毁chunk,创建新的PoolChunk
-            // todo
-            // destroyChunk(chunk);
-        }
+//        if (destroyChunk) {
+//            // destroyChunk not need to be called while holding the synchronized lock.
+//            // 销毁chunk,创建新的PoolChunk
+//            // todo
+////            destroyChunk(chunk);
+//        }
 
     }
+
+
 }

@@ -5,6 +5,7 @@ import pool.recycle.ThreadLocalCache;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static pool.LongPriorityQueue.newRunsAvailQueueArray;
 
@@ -56,6 +57,11 @@ final public class PoolChunk<T> implements Chunk {
     private static int IS_SUBPAGE = 1;
 
     private final int nPSizes = 40;
+
+    /**
+     * Accounting of pinned memory – memory that is currently in use by ByteBuf instances.
+     */
+    private final AtomicLong pinnedBytes = new AtomicLong();
 
     /**
      * manage all avail runs
@@ -124,16 +130,7 @@ final public class PoolChunk<T> implements Chunk {
         return ByteBuffer.allocateDirect(capacity);
     }
 
-    private void allocateNormal(PooledByteBuf<ByteBuffer> buf, int reqCapacity, int sizeIdx) {
-
-        // todo 从队列中获取去chunk
-
-        // add a new chunk
-        PoolChunk<ByteBuffer> chunk = new PoolChunk<>(null, allocateDirect(chunkSize));
-        chunk.allocate(buf, reqCapacity, sizeIdx);
-    }
-
-    public boolean allocate(PooledByteBuf<T> buf, int reqCapacity, int sizeIdx) {
+    public boolean allocate(PooledByteBuf<T> buf, int reqCapacity, int sizeIdx, ThreadLocalCache cache) {
         // todo subpage 子页分配
 
         // 超出子页大小的 normal分配机制
@@ -147,14 +144,18 @@ final public class PoolChunk<T> implements Chunk {
         // todo handle规范检查
 //        assert !isSubpage(handle);
         ByteBuffer nioBuffer = cachedNioBuffers != null ? cachedNioBuffers.pollLast() : null;
-        initBuf(buf, nioBuffer, handle, reqCapacity, null);
+        initBuf(buf, nioBuffer, handle, reqCapacity, cache);
         return true;
     }
 
-    public void initBuf(PooledByteBuf<T> buf, ByteBuffer nioBuffer, long handle, int reqCapacity, ThreadLocalCache threadCache) {
+    public void initBuf(PooledByteBuf<T> buf, ByteBuffer nioBuffer, long handle, int reqCapacity, ThreadLocalCache cache) {
         int maxLength = runSize(pageShifts, handle);
         buf.init(this, nioBuffer, handle, runOffset(handle) << pageShifts,
-                reqCapacity, maxLength);
+                reqCapacity, maxLength, cache);
+    }
+
+    public static boolean isSubpage(long handle) {
+        return (handle >> IS_SUBPAGE_SHIFT & 1) == 1L;
     }
 
     private long allocateNormal(int runSize) {
@@ -385,5 +386,10 @@ final public class PoolChunk<T> implements Chunk {
 
     private long getAvailRunByOffset(int runOffset) {
         return runsAvailMap.get(runOffset);
+    }
+
+    public void decrementPinnedMemory(int delta) {
+        assert delta > 0;
+        pinnedBytes.getAndAdd(-delta);
     }
 }

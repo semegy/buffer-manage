@@ -94,8 +94,7 @@ public abstract class Recycler<T> {
 
     private int maxCapacityPerThread = 8;
 
-    private final ThreadLocal<LocalPool<T>> threadLocal = new ThreadLocal<>();
-
+    private final ThreadLocal<LocalPool<T>> threadLocal = new ThreadLocal().withInitial(LocalPool::new);
     public T get() {
         if (maxCapacityPerThread == 0) {
             // 直接新建一个对象，维护一个无回收HANDLE对象
