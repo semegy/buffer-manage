@@ -14,8 +14,9 @@ public class PoolArenaTest {
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
+        PooledBufferAllocate bufferAllocate = new PooledBufferAllocate(32, 8192, 11, 256, 64, true);
         // 假设 PoolArena 有一个公共构造函数，用于实例化对象
-        arena = new PoolArena<>(1024 * 8, 13, 1024 * 1024 * 16, this, 0);
+        arena = new PoolArena<>(1024 * 8, 13, 1024 * 1024 * 16, bufferAllocate, 0);
     }
 
     @Test

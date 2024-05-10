@@ -31,21 +31,21 @@ public class PoolChunkList<T> {
         this.maxUsage = maxUsage;
         this.maxCapacity = calculateMaxCapacity(minUsage, chunkSize);
 
-        // the thresholds are aligned with PoolChunk.usage() logic:
-        // 1) basic logic: usage() = 100 - freeBytes * 100L / chunkSize
-        //    so, for example: (usage() >= maxUsage) condition can be transformed in the following way:
-        //      100 - freeBytes * 100L / chunkSize >= maxUsage
-        //      freeBytes <= chunkSize * (100 - maxUsage) / 100
-        //      let freeMinThreshold = chunkSize * (100 - maxUsage) / 100, then freeBytes <= freeMinThreshold
+        // 阈值与 PoolChunk.usage（） 逻辑一致：
+        // 1）基本逻辑：usage（） = 100 - freeBytes * 100L / chunkSize
+        // 因此，例如：（usage（） >= maxUsage） 条件可以通过以下方式进行转换：
+        // 100 - freeBytes * 100L / chunkSize >= maxUsage
+        // freeBytes <= chunkSize * （100 - 最大使用量） / 100
+        // let freeMinThreshold = chunkSize * （100 - maxUsage） / 100，则 freeBytes <= freeMinThreshold
         //
-        //  2) usage() returns an int value and has a floor rounding during a calculation,
-        //     to be aligned absolute thresholds should be shifted for "the rounding step":
-        //       freeBytes * 100 / chunkSize < 1
-        //       the condition can be converted to: freeBytes < 1 * chunkSize / 100
-        //     this is why we have + 0.99999999 shifts. A example why just +1 shift cannot be used:
-        //       freeBytes = 16777216 == freeMaxThreshold: 16777216, usage = 0 < minUsage: 1, chunkSize: 16777216
-        //     At the same time we want to have zero thresholds in case of (maxUsage == 100) and (minUsage == 100).
-        //
+        // 2） usage（） 返回一个 int 值，并在计算过程中进行下限舍入，
+        // 要对齐，应为“舍入步骤”移动绝对阈值：
+        // freeBytes * 100 / chunkSize < 1
+        // 条件可以转换为：freeBytes < 1 * chunkSize / 100
+        // 这就是为什么我们有 + 0.99999999 班次。不能仅使用 +1 班次的示例：
+        // freeBytes = 16777216 == freeMaxThreshold： 16777216， usage = 0 < minUsage： 1， chunkSize： 16777216
+        // 同时，我们希望在 （maxUsage == 100） 和 （minUsage == 100） 的情况下阈值为零。
+
         // 空闲使用率小于最小使用率时，分配内存
         freeMinThreshold = (maxUsage == 100) ? 0 : (int) (chunkSize * (100.0 - maxUsage + 0.99999999) / 100L);
         // 空闲使用率大于最大使用率时，释放内存
@@ -152,7 +152,7 @@ public class PoolChunkList<T> {
         }
     }
 
-    public boolean allocate(PooledByteBuf<T> buf, int reqCapacity, int normCapacity, ThreadLocalCache cache) {
+    public boolean allocate(PooledByteBuf<T> buf, int reqCapacity, int normCapacity, ThreadLocalCache cache, int sizeIdx) {
         // normal内存容量
         if (normCapacity > maxCapacity) {
             // Either this PoolChunkList is empty or the requested capacity is larger then the capacity which can
@@ -161,7 +161,7 @@ public class PoolChunkList<T> {
         }
 
         for (PoolChunk<T> cur = head; cur != null; cur = cur.next) {
-            if (cur.allocate(buf, reqCapacity, normCapacity, cache)) {
+            if (cur.allocate(buf, reqCapacity, normCapacity, cache, sizeIdx)) {
                 if (cur.freeBytes <= freeMinThreshold) {
                     // 利用率增加，转移的更容易寻址的ChunkList中
                     remove(cur);

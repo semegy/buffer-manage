@@ -71,4 +71,8 @@ public class PooledByteBuf<T> implements ByteBuf {
         }
     }
 
+    void initUnpooled(PoolChunk<T> chunk, int length) {
+        init0(chunk, null, 0, 0, length, length, null);
+    }
+
 }

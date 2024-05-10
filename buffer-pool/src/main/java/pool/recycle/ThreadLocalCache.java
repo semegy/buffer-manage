@@ -73,6 +73,11 @@ public class ThreadLocalCache {
         return allocate(cache, buf, idx);
     }
 
+    public boolean allocateCacheSmall(PooledByteBuf<?> buf, int sizeIdx) {
+        MemoryRegionCache<ByteBuffer> cache = cache(normalDirectCaches, sizeIdx);
+        return allocate(cache, buf, sizeIdx);
+    }
+
     public <T> boolean add(PoolArena arena, PoolChunk<T> chunk, ByteBuffer nioBuffer, long handle, int normCapacity, SizeClass sizeClass) {
         int sizeIdx = arena.size2SizeIdx(normCapacity);
         MemoryRegionCache<?> cache = cache(arena, sizeIdx, sizeClass);

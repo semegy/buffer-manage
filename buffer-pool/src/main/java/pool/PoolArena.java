@@ -5,6 +5,7 @@ import pool.recycle.ThreadLocalCache;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAdder;
 
 import static pool.PoolChunk.isSubpage;
 
@@ -24,6 +25,12 @@ public class PoolArena<T> extends SizeClasses {
     private final PoolChunkList<T> q075;
     private final PoolChunkList<T> q100;
 
+    private final LongAdder activeBytesHuge = new LongAdder();
+
+    private final LongAdder allocationsHuge = new LongAdder();
+    private final LongAdder allocationsSmall = new LongAdder();
+
+
     public <T> void free(PoolChunk<T> chunk, ByteBuffer nioBuffer, long handle, int normCapacity, ThreadLocalCache cache) {
         SizeClass sizeClass = sizeClass(handle);
         if (cache != null && cache.add(this, chunk, nioBuffer, handle, normCapacity, sizeClass)) {
@@ -37,9 +44,12 @@ public class PoolArena<T> extends SizeClasses {
         return isSubpage(handle) ? SizeClass.Small : SizeClass.Normal;
     }
 
+    PoolSubpage<T> findSubpagePoolHead(int sizeIdx) {
+        return smallSubpagePools[sizeIdx];
+    }
+
     public enum SizeClass {
-        Small,
-        Normal
+        Small, Normal
     }
 
     public Recycler<PooledByteBuf<T>> recycler = new Recycler<PooledByteBuf<T>>() {
@@ -101,7 +111,75 @@ public class PoolArena<T> extends SizeClasses {
     private void allocate(ThreadLocalCache cache, PooledByteBuf<T> buf, int reqCapacity) {
         // 原理 根据请求的空间大小找到合适sizeIdx （寻址索引）
         final int sizeIdx = size2SizeIdx(reqCapacity);
-        allocateNormal(cache, buf, reqCapacity, sizeIdx);
+        // 相当于size小于28k
+        if (sizeIdx <= smallMaxSizeIdx) {
+            // 按页分配
+            allocateSmall(cache, buf, reqCapacity, sizeIdx);
+        } else if (sizeIdx < nSizes) { // chunk区大小不够 使用normal分配
+            // normal
+            allocateNormal(cache, buf, reqCapacity, sizeIdx);
+        } else {
+            int normCapacity = directMemoryCacheAlignment > 0 ? normalizeSize(reqCapacity) : reqCapacity;
+            // Huge allocations are never served via the cache so just call allocateHuge
+            // 大内存分配机制
+            // 不会通过缓存直接分配
+            allocateHuge(buf, normCapacity);
+        }
+    }
+
+    private void allocateSmall(ThreadLocalCache cache, PooledByteBuf<T> buf, int reqCapacity, int sizeIdx) {
+        if (cache.allocateCacheSmall(buf, sizeIdx)) {
+            // was able to allocate out of the cache so move on
+            // 缓存中取
+            return;
+        }
+
+        final PoolSubpage<T> head = smallSubpagePools[sizeIdx];
+        final boolean needsNormalAllocation;
+        synchronized (head) {
+            final PoolSubpage<T> subpage = head.next;
+            // s == head ?
+            needsNormalAllocation = subpage == head;
+            if (!needsNormalAllocation) {
+                // 分配subPage的handle位图信息
+                long handle = subpage.allocate();
+                assert handle >= 0;
+                // 为buf分配内存
+                subpage.chunk.initBufWithSubpage(buf, null, handle, reqCapacity, cache);
+            }
+        }
+
+        if (needsNormalAllocation) {
+            synchronized (this) {
+                allocate(cache, buf, reqCapacity, sizeIdx);
+            }
+        }
+
+        incSmallAllocation();
+    }
+
+    private void incSmallAllocation() {
+        allocationsSmall.increment();
+    }
+
+    private void allocateHuge(PooledByteBuf<T> buf, int reqCapacity) {
+        PoolChunk<T> chunk = newUnpooledChunk(reqCapacity);
+        activeBytesHuge.add(chunk.chunkSize());
+        // buf初始化
+        buf.initUnpooled(chunk, reqCapacity);
+        allocationsHuge.increment();
+    }
+
+    protected PoolChunk<T> newUnpooledChunk(int capacity) {
+        if (directMemoryCacheAlignment == 0) {
+            ByteBuffer memory = ByteBuffer.allocateDirect(capacity);
+            return new PoolChunk(this, memory, memory, capacity);
+        } else {
+            final ByteBuffer base = ByteBuffer.allocateDirect(capacity + directMemoryCacheAlignment);
+
+            final ByteBuffer memory = ByteBuffer.allocateDirect(capacity);
+            return new PoolChunk(this, base, memory, capacity);
+        }
     }
 
     private PooledByteBuf<T> newInstance(int maxCapacity) {
@@ -115,20 +193,23 @@ public class PoolArena<T> extends SizeClasses {
         if (cache.allocateCacheNormal(this, buf, sizeIdx)) {
             return;
         }
+        allocate(cache, buf, reqCapacity, sizeIdx);
+    }
 
+    private void allocate(ThreadLocalCache cache, PooledByteBuf<T> buf, int reqCapacity, int sizeIdx) {
         int runSize = sizeIdx2size(sizeIdx);
         synchronized (this) {
             // 挨个从不同使用率的chunkList中获取normal大小的内存空间，获取不到则重新建立一个新chunk分配内存
-            if (q050.allocate(buf, reqCapacity, runSize, cache) ||
-                    q025.allocate(buf, reqCapacity, runSize, cache) ||
-                    q000.allocate(buf, reqCapacity, runSize, cache) ||
-                    qInit.allocate(buf, reqCapacity, runSize, cache) ||
-                    q075.allocate(buf, reqCapacity, runSize, cache)) {
+            if (q050.allocate(buf, reqCapacity, runSize, cache, sizeIdx) ||
+                    q025.allocate(buf, reqCapacity, runSize, cache, sizeIdx) ||
+                    q000.allocate(buf, reqCapacity, runSize, cache, sizeIdx) ||
+                    qInit.allocate(buf, reqCapacity, runSize, cache, sizeIdx) ||
+                    q075.allocate(buf, reqCapacity, runSize, cache, sizeIdx)) {
                 return;
             }
             // Add a new chunk.
             PoolChunk<T> poolChunk = newChunk(pageSize, nPSizes, pageShifts, chunkSize);
-            poolChunk.allocate(buf, reqCapacity, runSize, cache);
+            poolChunk.allocate(buf, reqCapacity, runSize, cache, sizeIdx);
             qInit.add(poolChunk);
         }
     }
@@ -136,13 +217,11 @@ public class PoolArena<T> extends SizeClasses {
     private PoolChunk<T> newChunk(int pageSize, int nPSizes, int pageShifts, int chunkSize) {
         if (directMemoryCacheAlignment == 0) {
             ByteBuffer memory = ByteBuffer.allocateDirect(chunkSize);
-            return new PoolChunk(this, memory, memory, pageSize, pageShifts,
-                    chunkSize, nPSizes);
+            return new PoolChunk(this, memory, memory, pageSize, pageShifts, chunkSize, nPSizes);
         } else {
             ByteBuffer memory = ByteBuffer.allocateDirect(chunkSize);
             ByteBuffer base = ByteBuffer.allocateDirect(chunkSize);
-            return new PoolChunk(this, base, memory, pageSize,
-                    pageShifts, chunkSize, nPSizes);
+            return new PoolChunk(this, base, memory, pageSize, pageShifts, chunkSize, nPSizes);
         }
     }
 
