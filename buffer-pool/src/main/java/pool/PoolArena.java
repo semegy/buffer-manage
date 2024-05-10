@@ -128,7 +128,7 @@ public class PoolArena<T> extends SizeClasses {
             }
             // Add a new chunk.
             PoolChunk<T> poolChunk = newChunk(pageSize, nPSizes, pageShifts, chunkSize);
-            poolChunk.allocate(buf, reqCapacity, sizeIdx, cache);
+            poolChunk.allocate(buf, reqCapacity, runSize, cache);
             qInit.add(poolChunk);
         }
     }
