@@ -36,7 +36,9 @@ final public class PoolChunk<T> implements Chunk {
     private final int pageShifts;
 
     private final int chunkSize;
+    private final boolean pooled;
     public PoolArena arena;
+    private final Object base;
 
     PoolChunkList<T> parent;
     int freeBytes;
@@ -84,9 +86,9 @@ final public class PoolChunk<T> implements Chunk {
     private final Deque<ByteBuffer> cachedNioBuffers;
 
     PoolChunk(PoolArena<T> arena, Object base, T memory, int size) {
-//        unpooled = true;
+        pooled = false;
         this.arena = arena;
-//        this.base = base;
+        this.base = base;
         this.memory = memory;
         pageSize = 0;
         pageShifts = 0;
@@ -99,9 +101,9 @@ final public class PoolChunk<T> implements Chunk {
 
     @SuppressWarnings("unchecked")
     public PoolChunk(PoolArena<T> arena, Object base, T memory, int pageSize, int pageShifts, int chunkSize, int maxPageIdx) {
-//        unpooled = false;
+        pooled = true;
         this.arena = arena;
-//        this.base = base;
+        this.base = base;
         this.memory = memory;
         this.pageSize = pageSize;
         this.pageShifts = pageShifts;
@@ -239,6 +241,9 @@ final public class PoolChunk<T> implements Chunk {
     public static boolean isSubpage(long handle) {
         return (handle >> IS_SUBPAGE_SHIFT & 1) == 1L;
     }
+    static int bitmapIdx(long handle) {
+        return (int) handle;
+    }
 
     private long allocateNormal(int runSize) {
         synchronized (runsAvail) {
@@ -370,26 +375,26 @@ final public class PoolChunk<T> implements Chunk {
 
     public void free(long handle, int normCapacity, ByteBuffer nioBuffer) {
         int runSize = runSize(pageShifts, handle);
-//        if (isSubpage(handle)) {
-//            int sizeIdx = arena.size2SizeIdx(normCapacity);
-//            PoolSubpage<T> head = arena.findSubpagePoolHead(sizeIdx);
-//
-//            int sIdx = runOffset(handle);
-//            PoolSubpage<T> subpage = subpages[sIdx];
+        if (isSubpage(handle)) {
+            int sizeIdx = arena.size2SizeIdx(normCapacity);
+            PoolSubpage<T> head = arena.findSubpagePoolHead(sizeIdx);
+
+            int sIdx = runOffset(handle);
+            PoolSubpage<T> subpage = subpages[sIdx];
 //            assert subpage != null && subpage.doNotDestroy;
-//
-//            // Obtain the head of the PoolSubPage pool that is owned by the PoolArena and synchronize on it.
-//            // This is need as we may add it back and so alter the linked-list structure.
-//            synchronized (head) {
-//                if (subpage.free(head, bitmapIdx(handle))) {
-//                    //the subpage is still used, do not free it
-//                    return;
-//                }
+
+            // Obtain the head of the PoolSubPage pool that is owned by the PoolArena and synchronize on it.
+            // This is need as we may add it back and so alter the linked-list structure.
+            synchronized (head) {
+                if (subpage.free(head, bitmapIdx(handle))) {
+                    //the subpage is still used, do not free it
+                    return;
+                }
 //                assert !subpage.doNotDestroy;
-//                // Null out slot in the array as it was freed and we should not use it anymore.
-//                subpages[sIdx] = null;
-//            }
-//        }
+                // Null out slot in the array as it was freed and we should not use it anymore.
+                subpages[sIdx] = null;
+            }
+        }
 
         //start free run
         synchronized (runsAvail) {

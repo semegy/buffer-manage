@@ -73,6 +73,52 @@ public class PoolSubpage<T> {
     }
 
     /**
+     * @return {@code true} if this subpage is in use.
+     *         {@code false} if this subpage is not used by its chunk and thus it's OK to be released.
+     */
+    boolean free(PoolSubpage<T> head, int bitmapIdx) {
+        if (elemSize == 0) {
+            return true;
+        }
+        int q = bitmapIdx >>> 6;
+        int r = bitmapIdx & 63;
+        assert (bitmap[q] >>> r & 1) != 0;
+        bitmap[q] ^= 1L << r;
+
+        setNextAvail(bitmapIdx);
+
+        if (numAvail ++ == 0) {
+            addToPool(head);
+            /* When maxNumElems == 1, the maximum numAvail is also 1.
+             * Each of these PoolSubpages will go in here when they do free operation.
+             * If they return true directly from here, then the rest of the code will be unreachable
+             * and they will not actually be recycled. So return true only on maxNumElems > 1. */
+            if (maxNumElems > 1) {
+                return true;
+            }
+        }
+
+        if (numAvail != maxNumElems) {
+            return true;
+        } else {
+            // Subpage not in use (numAvail == maxNumElems)
+            if (prev == next) {
+                // Do not remove if this subpage is the only one left in the pool.
+                return true;
+            }
+
+            // Remove this subpage from the pool if there are other subpages left in the pool.
+            doNotDestroy = false;
+            removeFromPool();
+            return false;
+        }
+    }
+
+    private void setNextAvail(int bitmapIdx) {
+        nextAvail = bitmapIdx;
+    }
+
+    /**
      * 头插法
      *
      * @param head 池子中的头部页面，也就是要将当前对象添加到这个头部后面。

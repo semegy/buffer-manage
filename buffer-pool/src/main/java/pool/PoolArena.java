@@ -245,13 +245,16 @@ public class PoolArena<T> extends SizeClasses {
             // 销毁chunk?
             destroyChunk = !chunk.parent.free(chunk, handle, normCapacity, nioBuffer);
         }
-//        if (destroyChunk) {
-//            // destroyChunk not need to be called while holding the synchronized lock.
-//            // 销毁chunk,创建新的PoolChunk
-//            // todo
-////            destroyChunk(chunk);
-//        }
+        if (destroyChunk) {
+            // destroyChunk not need to be called while holding the synchronized lock.
+            // 销毁chunk,创建新的PoolChunk
+            destroyChunk(chunk);
+        }
 
+    }
+
+    private void destroyChunk(PoolChunk chunk) {
+        // TODO
     }
 
 
