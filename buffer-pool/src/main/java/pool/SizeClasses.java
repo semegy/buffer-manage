@@ -6,8 +6,6 @@ public abstract class SizeClasses implements SizeClassesMetric {
 
     private static final int LOG2_SIZE_CLASS_GROUP = 2;
     private static final int LOG2_MAX_LOOKUP_SIZE = 12;
-
-    private static final int INDEX_IDX = 0;
     private static final int LOG2GROUP_IDX = 1;
     private static final int LOG2DELTA_IDX = 2;
     private static final int NDELTA_IDX = 3;
@@ -73,6 +71,7 @@ public abstract class SizeClasses implements SizeClassesMetric {
         for (; size < chunkSize; log2Group++, log2Delta++) {
             // 设置规格组sizeClass
             for (int nDelta = 1; nDelta <= ndeltaLimit && size < chunkSize; nDelta++, nSizes++) {
+                // 规格组类型
                 short[] sizeClass = newSizeClass(nSizes, log2Group, log2Delta, nDelta, pageShifts);
                 sizeClasses[nSizes] = sizeClass;
                 size = normalMaxSize = sizeOf(sizeClass, directMemoryCacheAlignment);
@@ -105,7 +104,9 @@ public abstract class SizeClasses implements SizeClassesMetric {
                 lookupMaxSize = sizeOf(sz, directMemoryCacheAlignment);
             }
         }
+        // 小规格内存索引最大值
         this.smallMaxSizeIdx = smallMaxSizeIdx;
+        // 快速查询对应规格大小的辅助值上限，4096。
         this.lookupMaxSize = lookupMaxSize;
         // 整页倍数40，用于创建pageIndex2sizeTab映射表
         this.nPSizes = nPSizes;
@@ -127,6 +128,7 @@ public abstract class SizeClasses implements SizeClassesMetric {
         sizeIdx2sizeTab = newIdx2SizeTab(sizeClasses, nSizes, directMemoryCacheAlignment);
         // 创建页索引映射表
         pageIdx2sizeTab = newPageIdx2sizeTab(sizeClasses, nSizes, nPSizes, directMemoryCacheAlignment);
+        // 小规格内存索引映射表
         size2idxTab = newSize2idxTab(lookupMaxSize, sizeClasses);
     }
 
@@ -134,10 +136,10 @@ public abstract class SizeClasses implements SizeClassesMetric {
      * 计算大小类别。
      * 该方法用于根据提供的参数计算出与内存分配相关的大小类别信息。
      *
-     * @param index 类别的索引。
-     * @param log2Group 以2为底的规格组指数。
-     * @param log2Delta 以2为底的规格组增量指数。
-     * @param nDelta 规格组的增量数。
+     * @param index      类别的索引。
+     * @param log2Group  以2为底的规格组指数。
+     * @param log2Delta  以2为底的规格组增量指数。
+     * @param nDelta     规格组的增量数。
      * @param pageShifts 页面大小的位移量。
      * @return 一个short数组，包含计算出的大小类别相关信息。
      */
@@ -153,27 +155,27 @@ public abstract class SizeClasses implements SizeClassesMetric {
             // 每个内存规格组规定有4种
             int size = calculateSize(log2Group, nDelta, log2Delta);
             // 是否是整页
-            isMultiPageSize = size == size / pageSize * pageSize? yes : no;
+            isMultiPageSize = size == size / pageSize * pageSize ? yes : no;
         }
 
         // 计算增量规格数的对数值 0 ：0 ， 1 ： 0 ， 2 ： 1 ， 3 ： 1 ， 4 ： 2
-        int log2Ndelta = nDelta == 0? 0 : log2(nDelta);
+        int log2Ndelta = nDelta == 0 ? 0 : log2(nDelta);
         // 是否需要移除
-        byte remove = 1 << log2Ndelta < nDelta? yes : no;
+        byte remove = 1 << log2Ndelta < nDelta ? yes : no;
 
         // 计算规格大小对数
-        int log2Size = log2Delta + log2Ndelta == log2Group? log2Group + 1 : log2Group;
+        int log2Size = log2Delta + log2Ndelta == log2Group ? log2Group + 1 : log2Group;
         if (log2Size == log2Group) {
             remove = yes;
         }
         // 偏移15位为32k，小于32k，则表示是页规格, 所以页规格最大是28k
-        short isSubpage = log2Size < pageShifts + LOG2_SIZE_CLASS_GROUP? yes : no;
+        short isSubpage = log2Size < pageShifts + LOG2_SIZE_CLASS_GROUP ? yes : no;
         // 对于方便较小size 快速查询对应规格大小的辅助值
         int log2DeltaLookup = log2Size < LOG2_MAX_LOOKUP_SIZE ||
                 log2Size == LOG2_MAX_LOOKUP_SIZE && remove == no
                 ? log2Delta : no;
 
-        return new short[] {
+        return new short[]{
                 (short) index, (short) log2Group, (short) log2Delta,
                 (short) nDelta, isMultiPageSize, isSubpage, (short) log2DeltaLookup
         };
@@ -182,8 +184,8 @@ public abstract class SizeClasses implements SizeClassesMetric {
     /**
      * 根据给定的尺寸类别数组，计算并生成一个对应尺寸索引和尺寸值的映射表。
      *
-     * @param sizeClasses 尺寸类别数组，每个类别是一个短整型数组，代表不同尺寸的集合。
-     * @param nSizes 尺寸类别数组的大小，即尺寸类别的数量。
+     * @param sizeClasses                尺寸类别数组，每个类别是一个短整型数组，代表不同尺寸的集合。
+     * @param nSizes                     尺寸类别数组的大小，即尺寸类别的数量。
      * @param directMemoryCacheAlignment 直接内存缓存对齐的大小。
      * @return 一个整型数组，索引表示尺寸类别的索引，值表示对应尺寸类别的大小。
      */
@@ -205,12 +207,13 @@ public abstract class SizeClasses implements SizeClassesMetric {
      * 计算给定参数的尺寸大小。
      *
      * @param log2Group 以2为底的组指数，表示组的大小。
-     * @param nDelta 增量的数量。
+     * @param nDelta    增量的数量。
      * @param log2Delta 以2为底的增量指数。
-     * 同组初始值大小 + 增量数*增量大小
+     *                  同组初始值大小 + 增量数*增量大小
      * @return 返回计算得到的尺寸大小。
      */
     private static int calculateSize(int log2Group, int nDelta, int log2Delta) {
+        // 规格组第一个内存块 + 增量的大小
         return (1 << log2Group) + (nDelta << log2Delta);
     }
 
@@ -245,7 +248,7 @@ public abstract class SizeClasses implements SizeClassesMetric {
      * 根据给定的查找最大大小和尺寸类别数组，生成一个新的尺寸到索引映射表。
      *
      * @param lookupMaxSize 查找最大大小，决定了映射表的长度。
-     * @param sizeClasses 尺寸类别数组，包含不同尺寸的分类信息。
+     * @param sizeClasses   尺寸类别数组，包含不同尺寸的分类信息。
      * @return int[] 返回一个尺寸到索引的映射表，其中索引用于快速查找对应的尺寸类别。
      */
     private static int[] newSize2idxTab(int lookupMaxSize, short[][] sizeClasses) {
@@ -324,7 +327,7 @@ public abstract class SizeClasses implements SizeClassesMetric {
         }
         // 调整size大小，将大小向上调整到最接近对齐的倍数。
         size = alignSizeIfNeeded(size, directMemoryCacheAlignment);
-
+        // 4096b 以内直接从映射表中取，减少计算量
         if (size <= lookupMaxSize) {
             //size-1 / MIN_TINY
             // 16 -> 0 : value -> 16b
@@ -333,15 +336,38 @@ public abstract class SizeClasses implements SizeClassesMetric {
             return size2idxTab[size - 1 >> LOG2_QUANTUM];
         }
 
-        int x = log2((size << 1) - 1);
-        int shift = x < LOG2_SIZE_CLASS_GROUP + LOG2_QUANTUM + 1
-                ? 0 : x - (LOG2_SIZE_CLASS_GROUP + LOG2_QUANTUM);
-
+        // 出第一组外的sizeIdx
+        // lastGroupSize = 1>>log2Group + nDelta<<log2Delta
+        // log2Group = log2Delta + LOG2_SIZE_CLASS_GROUP
+        // nDelta = 2^LOG2_SIZE_CLASS_GROU
+        // log2Size = log2(size<<1-1)
+        // log2Size = log2(2^(log2Group + 1))
+        // log2Size = log2Group + 1
+        // log2Delta = log2Group - LOG2_SIZE_CLASS_GROUP = log2Size - 1 - LOG2_SIZE_CLASS_GROUP
+        int log2Size = log2((size << 1) - 1);
+        // 第一组默认 0
+        int shift = log2Size < LOG2_SIZE_CLASS_GROUP + LOG2_QUANTUM + 1
+                ? 0 : log2Size - (LOG2_SIZE_CLASS_GROUP + LOG2_QUANTUM);
+        // 组内所在第一个内存块索引
         int group = shift << LOG2_SIZE_CLASS_GROUP;
 
-        int log2Delta = x < LOG2_SIZE_CLASS_GROUP + LOG2_QUANTUM + 1
-                ? LOG2_QUANTUM : x - LOG2_SIZE_CLASS_GROUP - 1;
-
+        // 第一组默认4
+        int log2Delta = log2Size < LOG2_SIZE_CLASS_GROUP + LOG2_QUANTUM + 1
+                ? LOG2_QUANTUM : log2Size - LOG2_SIZE_CLASS_GROUP - 1;
+        //  计算掩码
+        // index = group + mod
+        // group 是该组得第一个内存块索引
+        // mod 是偏移位置    也即是 nDelta - 1
+        // size=(2^LOG2_SIZE_CLASS_GROUP + nDelta -1 + 1)* (1<<log2Delta)
+        // 再进一步转换 将1提出来
+        //size=(2^LOG2_SIZE_CLASS_GROUP + nDelta -1)*(1<<log2Delta)+(1<<log2Delta)
+        //2^LOG2_SIZE_CLASS_GROUP + nDelta-1=(size-(1<<log2Delta))/(1<<log2Delta)
+        // size - 1 是为了申请内存等于内存块size时避免分配到下一个内存块size中
+        // & deltaInverseMask 将申请内存大小最后log2Delta个bit位设置为0,可以理解为 减去 1<<log2Delta
+        // >> log2Delta   可以理解成  除以 1<<log2Delta
+        // & (1 << LOG2_SIZE_CLASS_GROUP) - 1 取低LOG2_SIZE_CLASS_GROUP位数 等价与-2^LOG2_SIZE_CLASS_GROUP
+        // mod = (size-(1<<log2Delta))/(1<<log2Delta) - 2^LOG2_SIZE_CLASS_GROUP
+        //最终 mod = nDelta - 1
         int deltaInverseMask = -1 << log2Delta;
         int mod = (size - 1 & deltaInverseMask) >> log2Delta &
                 (1 << LOG2_SIZE_CLASS_GROUP) - 1;
@@ -359,34 +385,54 @@ public abstract class SizeClasses implements SizeClassesMetric {
         return pages2pageIdxCompute(pages, true);
     }
 
-    private int pages2pageIdxCompute(int pages, boolean floor) {
+    /**
+     * 根据页面数量计算页面索引。
+     * 此方法用于根据提供的页面数量和是否使用下界标志，计算出对应的页面索引。
+     * 页面索引的计算涉及到页面大小的调整和基于位移的计算。
+     * 算法与size2SizeIdx方法类似，但用途不同。
+     *
+     * @param pages 页面数量。
+     * @param floor 是否使用下界标志。如果为true，则在计算页面索引后会检查是否需要向下调整索引。
+     * @return 计算得到的页面索引。
+     */
+    protected int pages2pageIdxCompute(int pages, boolean floor) {
+        // 计算页面大小
         int pageSize = pages << pageShifts;
+        // 如果页面大小超过块大小，则返回最大索引值
         if (pageSize > chunkSize) {
             return nPSizes;
         }
 
+        //对pageSize进行log2的向上取整
         int x = log2((pageSize << 1) - 1);
 
+        //x >= LOG2_SIZE_CLASS_GROUP + pageShifts + 1后则每个size都是1<<pageShifts
         int shift = x < LOG2_SIZE_CLASS_GROUP + pageShifts
                 ? 0 : x - (LOG2_SIZE_CLASS_GROUP + pageShifts);
 
+        // 计算组索引
         int group = shift << LOG2_SIZE_CLASS_GROUP;
 
+        // log2Delta 计算
         int log2Delta = x < LOG2_SIZE_CLASS_GROUP + pageShifts + 1 ?
                 pageShifts : x - LOG2_SIZE_CLASS_GROUP - 1;
 
+        // 计算delta的反掩码，用于计算模数
         int deltaInverseMask = -1 << log2Delta;
+        // 计算模数和索引的调整值
         int mod = (pageSize - 1 & deltaInverseMask) >> log2Delta &
                 (1 << LOG2_SIZE_CLASS_GROUP) - 1;
 
+        // 计算最终的页面索引
         int pageIdx = group + mod;
 
+        // 如果使用下界且计算得到的页面大小大于原始页面数量，则调整页面索引
         if (floor && pageIdx2sizeTab[pageIdx] > pages << pageShifts) {
             pageIdx--;
         }
-
         return pageIdx;
     }
+
 
     /**
      * 将大小向上调整到最接近对齐的倍数。

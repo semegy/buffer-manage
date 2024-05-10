@@ -36,8 +36,7 @@ public class PooledBufferAllocate implements BufferAllocate {
     private Handle handle = new Handle() {
         @Override
         public ByteBuf allocate() {
-            ioBuffer(guess());
-            return null;
+            return ioBuffer(guess());
         }
 
         @Override
@@ -147,8 +146,6 @@ public class PooledBufferAllocate implements BufferAllocate {
         }
     }
 
-    private static final int DEFAULT_NORMAL_CACHE_SIZE = 64;
-
     static {
         int defaultAlignment = 0;
         int defaultPageSize = 8192;
@@ -227,7 +224,7 @@ public class PooledBufferAllocate implements BufferAllocate {
 
         directArenas = newArenaArray(nDirectArena);
         for (int i = 0; i < directArenas.length; i++) {
-            PoolArena arena = new PoolArena(pageSize, pageShifts, chunkSize, 0);
+            PoolArena arena = new PoolArena(pageSize, pageShifts, chunkSize, this, 0);
             directArenas[i] = arena;
         }
     }

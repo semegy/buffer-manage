@@ -21,6 +21,8 @@ public class PooledByteBuf<T> implements ByteBuf {
     private ByteBuffer tmpNioBuf;
     private ThreadLocalCache cache;
 
+    private PooledBufferAllocate allocator;
+
     public PooledByteBuf(Recycler.Handle recyclerHandle) {
         this.recyclerHandle = recyclerHandle;
     }
@@ -33,16 +35,16 @@ public class PooledByteBuf<T> implements ByteBuf {
     private void init0(PoolChunk<T> chunk, ByteBuffer nioBuffer,
                        long handle, int offset, int length, int maxLength, ThreadLocalCache cache) {
 
-//        chunk.incrementPinnedMemory(maxLength);
+        chunk.incrementPinnedMemory(maxLength);
         this.chunk = chunk;
         memory = chunk.memory;
         tmpNioBuf = nioBuffer;
-//        Object allocator = chunk.arena.parent;
+        allocator = chunk.arena.parent;
+        this.cache = cache;
         this.handle = handle;
         this.offset = offset;
         this.length = length;
         this.maxLength = maxLength;
-        this.cache = cache;
     }
 
     @Override

@@ -65,7 +65,7 @@ public class ThreadLocalCache {
     }
 
 
-    public boolean allocateNormal(PoolArena area, PooledByteBuf buf, int sizeIdx) {
+    public boolean allocateCacheNormal(PoolArena area, PooledByteBuf buf, int sizeIdx) {
         // 调整大小索引，以区分小页池之外的索引，主要用于计算在特定内存类型中的实际索引位置。
         int idx = sizeIdx - area.numSmallSubpagePools;
         // 如果区域设置为直接内存，则从直接内存缓存数组中获取缓存。
@@ -156,7 +156,13 @@ public class ThreadLocalCache {
         // 调整大小索引，以区分小页池之外的索引，主要用于计算在特定内存类型中的实际索引位置。
         int idx = sizeIdx - area.numSmallSubpagePools;
         // 如果区域设置为直接内存，则从直接内存缓存数组中获取缓存。
-        return cache(normalDirectCaches, idx);
+        MemoryRegionCache<ByteBuffer> cache = cache(normalDirectCaches, idx);
+        // 缓存清理，避免缓存长时间停留
+        if (++allocations >= freeSweepAllocationThreshold) {
+            allocations = 0;
+            trim();
+        }
+        return cache;
     }
 
     static final class Entry<T> {
@@ -234,8 +240,10 @@ public class ThreadLocalCache {
         private int free(int max, boolean finalizer) {
             int numFreed = 0;
             for (; numFreed < max; numFreed++) {
+                // 取出队列中的缓存
                 Entry<T> entry = queue.poll();
                 if (entry != null) {
+                    // 释放缓存
                     freeEntry(entry, finalizer);
                 } else {
                     // all cleared
@@ -260,6 +268,7 @@ public class ThreadLocalCache {
 
             chunk.arena.freeChunk(chunk, handle, normCapacity, sizeClass, nioBuffer, finalizer);
         }
+
         public final boolean add(PoolChunk<?> chunk, ByteBuffer nioBuffer, long handle, int normCapacity) {
             Entry<T> entry = newEntry(chunk, nioBuffer, handle, normCapacity);
             boolean queued = queue.offer(entry);

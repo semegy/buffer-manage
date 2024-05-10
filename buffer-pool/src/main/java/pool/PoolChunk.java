@@ -5,7 +5,7 @@ import pool.recycle.ThreadLocalCache;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 import static pool.LongPriorityQueue.newRunsAvailQueueArray;
 
@@ -40,6 +40,7 @@ final public class PoolChunk<T> implements Chunk {
 
     PoolChunkList<T> parent;
 
+
     int freeBytes;
 
     // todo 默认chunk 分区 16M， 后面拓展改造
@@ -61,7 +62,7 @@ final public class PoolChunk<T> implements Chunk {
     /**
      * Accounting of pinned memory – memory that is currently in use by ByteBuf instances.
      */
-    private final AtomicLong pinnedBytes = new AtomicLong();
+    private final LongAdder pinnedBytes = new LongAdder();
 
     /**
      * manage all avail runs
@@ -84,20 +85,26 @@ final public class PoolChunk<T> implements Chunk {
     // This may be null if the PoolChunk is unpooled as pooling the ByteBuffer instances does not make any sense here.
     private final Deque<ByteBuffer> cachedNioBuffers;
 
-    public PoolChunk(PoolArena arena, T memory) {
+    @SuppressWarnings("unchecked")
+    public PoolChunk(PoolArena<T> arena, Object base, T memory, int pageSize, int pageShifts, int chunkSize, int maxPageIdx) {
+//        unpooled = false;
         this.arena = arena;
+//        this.base = base;
         this.memory = memory;
-        this.pageSize = DEFAULT_PAGE_SIZE;
-        this.pageShifts = PAGE_SHIFTS;
-        this.chunkSize = DEFAULT_MAX_CHUNK_SIZE;
-        this.freeBytes = DEFAULT_MAX_CHUNK_SIZE;
-        // chunk区分成多少页，此算法相当于chunkSize/pageSize, 用移位的方式更加高效
-        this.subpages = new PoolSubpage[DEFAULT_MAX_CHUNK_SIZE >> PAGE_SHIFTS];
-        int pages = DEFAULT_MAX_CHUNK_SIZE >> PAGE_SHIFTS;
-        runsAvail = newRunsAvailQueueArray(pages);
+        this.pageSize = pageSize;
+        this.pageShifts = pageShifts;
+        this.chunkSize = chunkSize;
+        freeBytes = chunkSize;
+        runsAvail = newRunsAvailQueueArray(maxPageIdx);
         runsAvailMap = new LongLongHashMap(-1);
-        long initHandle = (long) pages << (IN_USED_BIT_LENGTH + IS_USAGE + IS_SUBPAGE);
-        insertAvailRun(0, DEFAULT_MAX_CHUNK_SIZE >> PAGE_SHIFTS, initHandle);
+        subpages = new PoolSubpage[chunkSize >> pageShifts];
+
+        //insert initial run, offset = 0, pages = chunkSize / pageSize
+        int pages = chunkSize >> pageShifts;
+        // pageSize 信息保存至高位34-49 handle 15 位 pageOffSet + 15 位 pageSize 15 位 + 1 位 isUsed + 1 位 isSubpage + 32 位 bitmapIdx
+        long initHandle = (long) pages << SIZE_SHIFT;
+        insertAvailRun(0, pages, initHandle);
+
         cachedNioBuffers = new ArrayDeque<ByteBuffer>(8);
     }
 
@@ -130,19 +137,16 @@ final public class PoolChunk<T> implements Chunk {
         return ByteBuffer.allocateDirect(capacity);
     }
 
-    public boolean allocate(PooledByteBuf<T> buf, int reqCapacity, int sizeIdx, ThreadLocalCache cache) {
+    public boolean allocate(PooledByteBuf<T> buf, int reqCapacity, int runSize, ThreadLocalCache cache) {
         // todo subpage 子页分配
 
         // 超出子页大小的 normal分配机制
         // runSize must be multiple of pageSize
-        // runSize分配机制的索引位计算
-        int runSize = arena.sizeIdx2size(sizeIdx);
         long handle = allocateNormal(runSize);
         if (handle == -1) {
             return false;
         }
         // todo handle规范检查
-//        assert !isSubpage(handle);
         ByteBuffer nioBuffer = cachedNioBuffers != null ? cachedNioBuffers.pollLast() : null;
         initBuf(buf, nioBuffer, handle, reqCapacity, cache);
         return true;
@@ -224,7 +228,7 @@ final public class PoolChunk<T> implements Chunk {
     }
 
     private int runSize(int pageShifts, long handle) {
-        return 0;
+        return runPages(handle) << pageShifts;
     }
 
     private void removeAvailRun(LongPriorityQueue queue, long handle) {
@@ -277,9 +281,9 @@ final public class PoolChunk<T> implements Chunk {
     }
 
 
-    public void incrementPinnedMemory(int maxLength) {
-//        assert delta > 0;
-//        pinnedBytes.add(delta);
+    public void incrementPinnedMemory(int delta) {
+        assert delta > 0;
+        pinnedBytes.add(delta);
     }
 
     public void free(long handle, int normCapacity, ByteBuffer nioBuffer) {
@@ -390,6 +394,6 @@ final public class PoolChunk<T> implements Chunk {
 
     public void decrementPinnedMemory(int delta) {
         assert delta > 0;
-        pinnedBytes.getAndAdd(-delta);
+        pinnedBytes.add(-delta);
     }
 }

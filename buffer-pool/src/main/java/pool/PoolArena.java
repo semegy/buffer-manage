@@ -15,6 +15,15 @@ public class PoolArena<T> extends SizeClasses {
     private int deallocationsNormal;
     private int deallocationsSmall;
 
+    final PooledBufferAllocate parent;
+
+    private final PoolChunkList<T> q050;
+    private final PoolChunkList<T> q025;
+    private final PoolChunkList<T> q000;
+    private final PoolChunkList<T> qInit;
+    private final PoolChunkList<T> q075;
+    private final PoolChunkList<T> q100;
+
     public <T> void free(PoolChunk<T> chunk, ByteBuffer nioBuffer, long handle, int normCapacity, ThreadLocalCache cache) {
         SizeClass sizeClass = sizeClass(handle);
         if (cache != null && cache.add(this, chunk, nioBuffer, handle, normCapacity, sizeClass)) {
@@ -44,11 +53,26 @@ public class PoolArena<T> extends SizeClasses {
     public int numSmallSubpagePools;
     PoolSubpage<T>[] smallSubpagePools;
 
-    public PoolArena(int pageSize, int pageShifts, int chunkSize, int cacheAlignment) {
+    public PoolArena(int pageSize, int pageShifts, int chunkSize, PooledBufferAllocate parent, int cacheAlignment) {
         super(pageSize, pageShifts, chunkSize, cacheAlignment);
         this.nPSizes = 40;
         numSmallSubpagePools = nSubpages;
         smallSubpagePools = newSubpagePoolArray(nSubpages);
+        this.parent = parent;
+
+        q100 = new PoolChunkList<T>(this, null, 100, Integer.MAX_VALUE, chunkSize);
+        q075 = new PoolChunkList<T>(this, q100, 75, 100, chunkSize);
+        q050 = new PoolChunkList<T>(this, q075, 50, 100, chunkSize);
+        q025 = new PoolChunkList<T>(this, q050, 25, 75, chunkSize);
+        q000 = new PoolChunkList<T>(this, q025, 1, 50, chunkSize);
+        qInit = new PoolChunkList<T>(this, q000, Integer.MIN_VALUE, 25, chunkSize);
+
+        q100.prevList(q075);
+        q075.prevList(q050);
+        q050.prevList(q025);
+        q025.prevList(q000);
+        q000.prevList(null);
+        qInit.prevList(qInit);
     }
 
     private PoolSubpage<T> newSubpagePoolHead() {
@@ -87,17 +111,39 @@ public class PoolArena<T> extends SizeClasses {
     }
 
     private void allocateNormal(ThreadLocalCache cache, PooledByteBuf<T> buf, int reqCapacity, int sizeIdx) {
-        if (cache.allocateNormal(this, buf, sizeIdx)) {
+        // 缓存中取到可用的buf
+        if (cache.allocateCacheNormal(this, buf, sizeIdx)) {
             return;
         }
-        // Add a new chunk.
-        ByteBuffer memory = ByteBuffer.allocateDirect(reqCapacity);
-        PoolChunk poolChunk = newChunk(this, memory);
-        poolChunk.allocate(buf, reqCapacity, sizeIdx, cache);
+
+        int runSize = sizeIdx2size(sizeIdx);
+        synchronized (this) {
+            // 挨个从不同使用率的chunkList中获取normal大小的内存空间，获取不到则重新建立一个新chunk分配内存
+            if (q050.allocate(buf, reqCapacity, runSize, cache) ||
+                    q025.allocate(buf, reqCapacity, runSize, cache) ||
+                    q000.allocate(buf, reqCapacity, runSize, cache) ||
+                    qInit.allocate(buf, reqCapacity, runSize, cache) ||
+                    q075.allocate(buf, reqCapacity, runSize, cache)) {
+                return;
+            }
+            // Add a new chunk.
+            PoolChunk<T> poolChunk = newChunk(pageSize, nPSizes, pageShifts, chunkSize);
+            poolChunk.allocate(buf, reqCapacity, sizeIdx, cache);
+            qInit.add(poolChunk);
+        }
     }
 
-    PoolChunk<ByteBuffer> newChunk(PoolArena arena, ByteBuffer memory) {
-        return new PoolChunk<ByteBuffer>(this, memory);
+    private PoolChunk<T> newChunk(int pageSize, int nPSizes, int pageShifts, int chunkSize) {
+        if (directMemoryCacheAlignment == 0) {
+            ByteBuffer memory = ByteBuffer.allocateDirect(chunkSize);
+            return new PoolChunk(this, memory, memory, pageSize, pageShifts,
+                    chunkSize, nPSizes);
+        } else {
+            ByteBuffer memory = ByteBuffer.allocateDirect(chunkSize);
+            ByteBuffer base = ByteBuffer.allocateDirect(chunkSize);
+            return new PoolChunk(this, base, memory, pageSize,
+                    pageShifts, chunkSize, nPSizes);
+        }
     }
 
     public void freeChunk(PoolChunk chunk, long handle, int normCapacity, SizeClass sizeClass, ByteBuffer nioBuffer, boolean finalizer) {
@@ -118,7 +164,7 @@ public class PoolArena<T> extends SizeClasses {
                 }
             }
             // 销毁chunk?
-//            destroyChunk = !chunk.parent.free(chunk, handle, normCapacity, nioBuffer);
+            destroyChunk = !chunk.parent.free(chunk, handle, normCapacity, nioBuffer);
         }
 //        if (destroyChunk) {
 //            // destroyChunk not need to be called while holding the synchronized lock.

@@ -14,7 +14,7 @@ public class PoolArenaTest {
 
     @Before
     public void setUp() throws Exception {
-        poolArena = new PoolArena<>(1024 * 8, 13, 1024 * 1024 * 16, 0);
+        poolArena = new PoolArena<>(1024 * 8, 13, 1024 * 1024 * 16, this, 0);
         // 使用反射获取私有方法
         newInstanceMethod = PoolArena.class.getDeclaredMethod("newInstance", int.class);
         newInstanceMethod.setAccessible(true);
@@ -27,6 +27,5 @@ public class PoolArenaTest {
             // 验证结果是否正确
             assertNotNull(instance);
         }
-
     }
 }
