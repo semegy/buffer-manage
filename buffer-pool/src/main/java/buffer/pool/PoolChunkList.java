@@ -1,6 +1,6 @@
-package pool;
+package buffer.pool;
 
-import pool.recycle.ThreadLocalCache;
+import buffer.recycle.ThreadLocalCache;
 
 import java.nio.ByteBuffer;
 

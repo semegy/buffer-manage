@@ -1,5 +1,6 @@
 package pool;
 
+import buffer.pool.SizeClasses;
 import org.junit.Test;
 
 public class SizeClassesTest {

@@ -1,13 +1,13 @@
-package pool;
+package buffer.pool;
 
-import pool.recycle.ThreadLocalCache;
+import buffer.recycle.ThreadLocalCache;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.concurrent.atomic.LongAdder;
 
-import static pool.LongPriorityQueue.newRunsAvailQueueArray;
+import static buffer.pool.LongPriorityQueue.newRunsAvailQueueArray;
 
 final public class PoolChunk<T> implements Chunk {
 
@@ -36,9 +36,9 @@ final public class PoolChunk<T> implements Chunk {
     private final int pageShifts;
 
     private final int chunkSize;
-    private final boolean pooled;
+    public final boolean pooled;
     public PoolArena arena;
-    private final Object base;
+    public final T base;
 
     PoolChunkList<T> parent;
     int freeBytes;
@@ -78,14 +78,9 @@ final public class PoolChunk<T> implements Chunk {
 
     PoolChunk<T> prev;
 
-    // Use as cache for ByteBuffer created from the memory. These are just duplicates and so are only a container
-    // around the memory itself. These are often needed for operations within the Pooled*ByteBuf and so
-    // may produce extra GC, which can be greatly reduced by caching the duplicates.
-    //
-    // This may be null if the PoolChunk is unpooled as pooling the ByteBuffer instances does not make any sense here.
     private final Deque<ByteBuffer> cachedNioBuffers;
 
-    PoolChunk(PoolArena<T> arena, Object base, T memory, int size) {
+    PoolChunk(PoolArena<T> arena, T base, T memory, int size) {
         pooled = false;
         this.arena = arena;
         this.base = base;
@@ -100,7 +95,7 @@ final public class PoolChunk<T> implements Chunk {
     }
 
     @SuppressWarnings("unchecked")
-    public PoolChunk(PoolArena<T> arena, Object base, T memory, int pageSize, int pageShifts, int chunkSize, int maxPageIdx) {
+    public PoolChunk(PoolArena<T> arena, T base, T memory, int pageSize, int pageShifts, int chunkSize, int maxPageIdx) {
         pooled = true;
         this.arena = arena;
         this.base = base;
@@ -156,15 +151,13 @@ final public class PoolChunk<T> implements Chunk {
         if (sizeIdx <= arena.smallMaxSizeIdx) {
             // subpage分配
             handle = allocateSubpage(runSize, sizeIdx);
-            if (handle < 0) {
-                return false;
-            }
         } else {
             // 超出子页大小的 normal分配机制
             // runSize must be multiple of pageSize
             handle = allocateNormal(runSize);
+            assert !isSubpage(handle);
         }
-        if (handle == -1) {
+        if (handle < 0) {
             return false;
         }
         ByteBuffer nioBuffer = cachedNioBuffers != null ? cachedNioBuffers.pollLast() : null;
@@ -177,7 +170,6 @@ final public class PoolChunk<T> implements Chunk {
      * subpage pool in the PoolArena that owns this PoolChunk
      *
      * @param runSize
-     *
      * @return index in memoryMap
      */
     private long allocateSubpage(int runSize, int sizeIdx) {
@@ -192,7 +184,6 @@ final public class PoolChunk<T> implements Chunk {
             if (runHandle < 0) {
                 return -1;
             }
-
             int runOffset = runOffset(runHandle);
             assert subpages[runOffset] == null;
             int elemSize = arena.sizeIdx2size(sizeIdx);
@@ -232,6 +223,7 @@ final public class PoolChunk<T> implements Chunk {
 
         return runSize;
     }
+
     public void initBuf(PooledByteBuf<T> buf, ByteBuffer nioBuffer, long handle, int reqCapacity, ThreadLocalCache cache) {
         int maxLength = runSize(pageShifts, handle);
         buf.init(this, nioBuffer, handle, runOffset(handle) << pageShifts,
@@ -241,13 +233,13 @@ final public class PoolChunk<T> implements Chunk {
     public static boolean isSubpage(long handle) {
         return (handle >> IS_SUBPAGE_SHIFT & 1) == 1L;
     }
+
     static int bitmapIdx(long handle) {
         return (int) handle;
     }
 
     private long allocateNormal(int runSize) {
         synchronized (runsAvail) {
-            //find first queue which has at least one big enough run
             return allocateRun(runSize);
         }
     }
@@ -257,26 +249,34 @@ final public class PoolChunk<T> implements Chunk {
         int pages = runSize >> pageShifts;
         // 获取页索引
         int pageIdx = arena.pages2pageIdx(pages);
-        long handle = freeBytes == chunkSize ? arena.nPSizes - 1 : -1;
-        for (int i = pageIdx; i < arena.nPSizes; i++) {
-            LongPriorityQueue queue = runsAvail[i];
-            if (queue != null && !queue.isEmpty()) {
-                handle = queue.poll();
-                assert handle != LongPriorityQueue.NO_VALUE && !isUsed(handle) : "invalid handle: " + handle;
-                // 移除旧queue
-                removeAvailRun(queue, handle);
-                if (handle != -1) {
-                    // 拆分run
-                    handle = splitLargeRun(handle, pages);
+        if (freeBytes == chunkSize) {
+            LongPriorityQueue queue = runsAvail[nPSizes - 1];
+            return handle(queue, pages);
+        } else {
+            for (int i = pageIdx; i < arena.nPSizes; i++) {
+                LongPriorityQueue queue = runsAvail[i];
+                if (queue != null && !queue.isEmpty()) {
+                    return handle(queue, pages);
                 }
-                // 偏移量
-                int pinnedSize = runSize(pageShifts, handle);
-                // 减少空闲
-                freeBytes -= pinnedSize;
-                return handle;
             }
         }
         return -1;
+    }
+
+    private long handle(LongPriorityQueue queue, int pages) {
+        long handle = queue.poll();
+        assert handle != LongPriorityQueue.NO_VALUE && !isUsed(handle) : "invalid handle: " + handle;
+        // 移除旧queue
+        removeAvailRun(queue, handle);
+        if (handle != -1) {
+            // 拆分run
+            handle = splitLargeRun(handle, pages);
+        }
+        // 偏移量
+        int pinnedSize = runSize(pageShifts, handle);
+        // 减少空闲
+        freeBytes -= pinnedSize;
+        return handle;
     }
 
     private long splitLargeRun(long handle, int pages) {
@@ -293,7 +293,7 @@ final public class PoolChunk<T> implements Chunk {
             // 剩余可用run插入队列
             long availRun = toRunHandle(availOffset, remPages, 0);
             // 更新 availRun 与 availRunMap
-            insertAvailRun(availOffset, remPages, handle);
+            insertAvailRun(availOffset, remPages, availRun);
             // 使用信息保存至高32位 runOffSet:15, 本次占用页数:15， 1 占用标识:1; 0：分配子页标识:1位
             return toRunHandle(runOffset, pages, 1);
         }
@@ -302,12 +302,14 @@ final public class PoolChunk<T> implements Chunk {
         return handle;
     }
 
-    private long toRunHandle(int runOffset, int remPages, int isUsed) {
-        return (long) runOffset << RUN_OFFSET_SHIFT | remPages << SIZE_SHIFT | isUsed;
+    private long toRunHandle(int runOffset, int runPages, int isUsed) {
+        return (long) runOffset << RUN_OFFSET_SHIFT
+                | (long) runPages << SIZE_SHIFT
+                | (long) isUsed << IS_USED_SHIFT;
     }
 
     private int runOffset(long handle) {
-        return (int) handle >> RUN_OFFSET_SHIFT & 0x7fff;
+        return (int) (handle >> RUN_OFFSET_SHIFT);
     }
 
     private int runPages(long handle) {

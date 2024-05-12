@@ -1,9 +1,10 @@
-package pool.recycle;
+package buffer.recycle;
 
-import pool.PoolArena;
-import pool.PoolArena.SizeClass;
-import pool.PoolChunk;
-import pool.PooledByteBuf;
+import buffer.pool.PooledByteBuf;
+import buffer.pool.PoolArena;
+import buffer.pool.PoolArena.SizeClass;
+import buffer.pool.PoolChunk;
+import buffer.pool.PooleDirectByteBuf;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -96,12 +97,9 @@ public class ThreadLocalCache {
         }
 
         @Override
-        protected void initBuf(
-                PoolChunk<T> chunk, ByteBuffer nioBuffer, long handle, PooledByteBuf<T> buf, int reqCapacity,
-                ThreadLocalCache threadCache) {
+        protected void initBuf(PoolChunk<T> chunk, ByteBuffer nioBuffer, long handle, PooledByteBuf<T> buf, int reqCapacity, ThreadLocalCache threadCache) {
             chunk.initBuf(buf, nioBuffer, handle, reqCapacity, threadCache);
         }
-
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -227,7 +225,7 @@ public class ThreadLocalCache {
         }
 
         /**
-         * Init the {@link PooledByteBuf} using the provided chunk and handle with the capacity restrictions.
+         * Init the {@link PooleDirectByteBuf} using the provided chunk and handle with the capacity restrictions.
          */
         protected abstract void initBuf(PoolChunk<T> chunk, ByteBuffer nioBuffer, long handle,
                                         PooledByteBuf<T> buf, int reqCapacity, ThreadLocalCache threadCache);

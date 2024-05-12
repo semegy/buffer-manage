@@ -1,4 +1,4 @@
-package pool;
+package buffer.pool;
 
 public interface Chunk {
 

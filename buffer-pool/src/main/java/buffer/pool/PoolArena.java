@@ -1,13 +1,13 @@
-package pool;
+package buffer.pool;
 
-import pool.recycle.Recycler;
-import pool.recycle.ThreadLocalCache;
+import buffer.ByteBuf;
+import buffer.recycle.Recycler;
+import buffer.recycle.ThreadLocalCache;
+import sun.nio.ch.DirectBuffer;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
-
-import static pool.PoolChunk.isSubpage;
 
 public class PoolArena<T> extends SizeClasses {
 
@@ -41,7 +41,7 @@ public class PoolArena<T> extends SizeClasses {
     }
 
     private SizeClass sizeClass(long handle) {
-        return isSubpage(handle) ? SizeClass.Small : SizeClass.Normal;
+        return PoolChunk.isSubpage(handle) ? SizeClass.Small : SizeClass.Normal;
     }
 
     PoolSubpage<T> findSubpagePoolHead(int sizeIdx) {
@@ -52,9 +52,9 @@ public class PoolArena<T> extends SizeClasses {
         Small, Normal
     }
 
-    public Recycler<PooledByteBuf<T>> recycler = new Recycler<PooledByteBuf<T>>() {
-        protected PooledByteBuf<T> newObject(Recycler.Handle handle) {
-            return new PooledByteBuf<T>(handle);
+    public Recycler<PooledByteBuf> recycler = new Recycler() {
+        protected PooleDirectByteBuf newObject(Recycler.Handle handle) {
+            return new PooleDirectByteBuf(handle);
         }
     };
 
@@ -176,7 +176,6 @@ public class PoolArena<T> extends SizeClasses {
             return new PoolChunk(this, memory, memory, capacity);
         } else {
             final ByteBuffer base = ByteBuffer.allocateDirect(capacity + directMemoryCacheAlignment);
-
             final ByteBuffer memory = ByteBuffer.allocateDirect(capacity);
             return new PoolChunk(this, base, memory, capacity);
         }
@@ -254,7 +253,8 @@ public class PoolArena<T> extends SizeClasses {
     }
 
     private void destroyChunk(PoolChunk chunk) {
-        // TODO
+        DirectBuffer base = (DirectBuffer) chunk.base;
+        base.cleaner().clean();
     }
 
 

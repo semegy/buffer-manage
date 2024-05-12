@@ -1,19 +1,24 @@
-package pool;
+package buffer;
+
+import buffer.ByteBuf;
 
 /**
  * 给定一个buffer分配置器
  */
 public interface BufferAllocate {
 
+    static final int DEFAULT_MINIMUM = 64;
+    // Use an initial value that is bigger than the common MTU of 1500
+    // 默认大于通用MTU 1500 的初始值
+    // MTU 分包最大长度
+    static final int DEFAULT_INITIAL = 2048;
+    // 默认最大次数
+    static final int DEFAULT_MAXIMUM = 65536;
     static final int DEFAULT_MAX_CAPACITY = Integer.MAX_VALUE;
 
     public ByteBuf ioBuffer(int initialCapacity);
 
-    /**
-     * Creates a new handle.  The handle provides the actual operations and keeps the internal information which is
-     * required for predicting an optimal buffer capacity.
-     */
-    Handle newHandle();
+    int calculateNewCapacity(int targetCapacity, int maxCapacity);
 
 
     @Deprecated

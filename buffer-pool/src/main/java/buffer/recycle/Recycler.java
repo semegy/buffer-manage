@@ -1,6 +1,6 @@
-package pool.recycle;
+package buffer.recycle;
 
-import pool.PooledByteBuf;
+import buffer.pool.PooledByteBuf;
 
 import java.util.LinkedList;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
@@ -55,10 +55,7 @@ public abstract class Recycler<T> {
             return this.value;
         }
 
-
-        @SuppressWarnings({"FieldMayBeFinal", "unused"}) // Updated by STATE_UPDATER.
-        private volatile int state; // State is initialised to STATE_CLAIMED (aka. 0) so they can be released.
-
+        private volatile int state;
 
         public boolean availableToClaim() {
 

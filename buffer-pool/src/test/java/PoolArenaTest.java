@@ -1,10 +1,10 @@
+import buffer.ByteBuf;
+import buffer.pool.PoolArena;
+import buffer.pool.PooleDirectByteBuf;
+import buffer.pool.PooledBufferAllocate;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.MockitoAnnotations;
-import pool.ByteBuf;
-import pool.PoolArena;
-import pool.PooledBufferAllocate;
-import pool.PooledByteBuf;
 
 public class PoolArenaTest {
 
@@ -27,7 +27,7 @@ public class PoolArenaTest {
         for (int i = 0; i < 10; i++) {
             // 测试 allocate 方法的行为
             ByteBuf allocatedBuffer = bufferAllocate.newDirectBuffer(reqCapacity, maxCapacity);
-            PooledByteBuf p = (PooledByteBuf) allocatedBuffer;
+            PooleDirectByteBuf p = (PooleDirectByteBuf) allocatedBuffer;
             p.deallocate();
         }
     }

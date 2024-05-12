@@ -1,12 +1,21 @@
-package pool;
+package buffer.pool;
 
-import pool.recycle.ThreadLocalCache;
+import buffer.BufferAllocate;
+import buffer.ByteBuf;
+import buffer.recycle.ThreadLocalCache;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+
+import static java.lang.Math.max;
+import static java.lang.Math.min;
 
 public class PooledBufferAllocate implements BufferAllocate {
 
-    private int nextReceiveBufferSize = 1024;
+
+    private int nextReceiveBufferSize;
+    static final int CALCULATE_THRESHOLD = 1048576 * 4; // 4 MiB page
 
     public static final int DEFAULT_MAX_CACHED_BYTEBUFFERS_PER_CHUNK = 1023;
 
@@ -33,7 +42,110 @@ public class PooledBufferAllocate implements BufferAllocate {
 
     private final PoolThreadLocalCache threadCache;
 
-    private Handle handle = new Handle() {
+    private static final int[] SIZE_TABLE;
+
+    private int index;
+
+    static {
+        List<Integer> sizeTable = new ArrayList<Integer>();
+        // 设置空闲大小
+        // 0 ~ 32 为 16 -> 32 -> ..-> 16n -> 512
+        for (int i = 16; i < 512; i += 16) {
+            sizeTable.add(i);
+        }
+
+        // Suppress a warning since i becomes negative when an integer overflow happens
+        // 0 ~ 21
+        // 512bit -> 1k -> 2k -> ..-> 512k -> 1M -> 2M -> .. -> 1024M
+        for (int i = 512; i > 0; i <<= 1) { // lgtm[java/constant-comparison]
+            sizeTable.add(i);
+        }
+
+        // 设置内存大小分区 31 + 22 = 53个分区
+        SIZE_TABLE = new int[sizeTable.size()];
+        for (int i = 0; i < SIZE_TABLE.length; i ++) {
+            SIZE_TABLE[i] = sizeTable.get(i);
+        }
+    }
+
+    Handle handle = new HandleImpl(DEFAULT_MINIMUM, DEFAULT_INITIAL, DEFAULT_MAXIMUM);
+
+    /**
+     * 根据内存大小获取分区
+     * @param size
+     * @return
+     */
+    private static int getSizeTableIndex(final int size) {
+        // high = 52 二分法
+        for (int low = 0, high = SIZE_TABLE.length - 1;;) {
+            if (high < low) {
+                // 高索引位 < 低索引位
+                return low;
+            }
+            if (high == low) {
+                // 高索引位 == 低索引位
+                return high;
+            }
+
+            // 第一次 mid = high / 2 + 0 = 26
+            // 第二次 mid = 1 + 13 = 14
+            // 第四次 mid = 2 + 7 == 9
+            // 第五次 mid = 3 + 4 = 7
+            // 第六次 mid = 3 + 4 = 7
+            int mid = low + high >>> 1;
+            int a = SIZE_TABLE[mid];
+            int b = SIZE_TABLE[mid + 1];
+            if (size > b) {
+                // 最小索引位
+                low = mid + 1;
+            } else if (size < a) {
+                // 最大索引位
+                high = mid - 1;
+            } else if (size == a) {
+                // 找到合适的大小 返回mid
+                return mid;
+            } else {
+                // 返回high
+                return mid + 1;
+            }
+        }
+    }
+
+    public class HandleImpl implements Handle {
+
+        // 最小索引
+        private final int minIndex;
+        // 最大索引
+        private final int maxIndex;
+        private int totalBytesRead;
+
+        private int attemptBytesRead;
+
+        private int lastBytesRead;
+
+        private boolean decreaseNow = false;
+
+        HandleImpl(int minimum, int maximum, int initial) {
+            int minIndex = getSizeTableIndex(minimum);
+            // 分配不足 索引+1
+            if (SIZE_TABLE[minIndex] < minimum) {
+                this.minIndex = minIndex + 1;
+            } else {
+                this.minIndex = minIndex;
+            }
+            // 最大索引
+            int maxIndex = getSizeTableIndex(maximum);
+            // 分配过大 索引 - 1
+            if (SIZE_TABLE[maxIndex] > maximum) {
+                this.maxIndex = maxIndex - 1;
+            } else {
+                this.maxIndex = maxIndex;
+            }
+            int initialIndex = getSizeTableIndex(initial);
+
+            nextReceiveBufferSize = SIZE_TABLE[initialIndex];
+        }
+
         @Override
         public ByteBuf allocate() {
             return ioBuffer(guess());
@@ -51,22 +163,58 @@ public class PooledBufferAllocate implements BufferAllocate {
 
         @Override
         public void lastBytesRead(int bytes) {
+            // If we read as much as we asked for we should check if we need to ramp up the size of our next guess.
+            // This helps adjust more quickly when large amounts of data is pending and can avoid going back to
+            // the selector to check for more data. Going back to the selector can add significant latency for large
+            // data transfers.
+            // 如果上次读取字节 == 尝试读取的字节
+            if (bytes == attemptedBytesRead()) {
+                record(bytes);
+            }
+            // 上次次读取字节数累加
+            // 上次读取字节
+            lastBytesRead = bytes;
+            if (bytes > 0) {
+                // 本次需要读取字节
+                totalBytesRead += bytes;
+            }
+        }
 
+        private void record(int actualReadBytes) {
+            // 实际读取的字节 <= nextReceiveBufferSize 的前一个字节大小
+            if (actualReadBytes <= SIZE_TABLE[max(0, index - 1)]) {
+                // 使用立马递减？
+                if (decreaseNow) {
+                    // 重置index nextReceiveBufferSize，降低空间使用率
+                    index = max(index - 1, minIndex);
+                    nextReceiveBufferSize = SIZE_TABLE[index];
+                    // 设置 decreaseNow = false
+                    decreaseNow = false;
+                } else {
+                    // 下次再小 会触发if（true）逻辑
+                    decreaseNow = true;
+                }
+            } else if (actualReadBytes >= nextReceiveBufferSize) {
+                // 增长空间
+                index = min(index + 1, maxIndex);
+                nextReceiveBufferSize = SIZE_TABLE[index];
+                decreaseNow = false;
+            }
         }
 
         @Override
         public int lastBytesRead() {
-            return 0;
+            return lastBytesRead;
         }
 
         @Override
         public void attemptedBytesRead(int bytes) {
-
+            attemptBytesRead = bytes;
         }
 
         @Override
         public int attemptedBytesRead() {
-            return 0;
+            return attemptBytesRead;
         }
 
         @Override
@@ -76,13 +224,49 @@ public class PooledBufferAllocate implements BufferAllocate {
 
         @Override
         public void readComplete() {
-
+            // 完成空间大小预估设置
+            record(totalBytesRead());
         }
+        protected final int totalBytesRead() {
+            return totalBytesRead < 0 ? Integer.MAX_VALUE : totalBytesRead;
+        }
+
     };
 
     @Override
-    public Handle newHandle() {
-        return null;
+    public int calculateNewCapacity(int minNewCapacity, int maxCapacity) {
+        if (minNewCapacity > maxCapacity) {
+            throw new IllegalArgumentException(String.format(
+                    "minNewCapacity: %d (expected: not greater than maxCapacity(%d)",
+                    minNewCapacity, maxCapacity));
+        }
+        final int threshold = CALCULATE_THRESHOLD; // 4 MiB page
+
+        if (minNewCapacity == threshold) {
+            return threshold;
+        }
+
+        // If over threshold, do not double but just increase by threshold.
+        if (minNewCapacity > threshold) {
+            int newCapacity = minNewCapacity / threshold * threshold;
+            if (newCapacity > maxCapacity - threshold) {
+                newCapacity = maxCapacity;
+            } else {
+                newCapacity += threshold;
+            }
+            return newCapacity;
+        }
+
+        // 64 <= newCapacity is a power of 2 <= threshold
+        int value = Math.max(minNewCapacity, 64);
+        int newCapacity = 1 << (32 - Integer.numberOfLeadingZeros(value - 1));
+        return Math.min(newCapacity, maxCapacity);
+    }
+
+    public ThreadLocalCache threadCache() {
+        ThreadLocalCache cache = threadCache.get();
+        assert cache != null;
+        return cache;
     }
 
     private final class PoolThreadLocalCache extends ThreadLocal<ThreadLocalCache> {
@@ -174,6 +358,7 @@ public class PooledBufferAllocate implements BufferAllocate {
         DEFAULT_CACHE_TRIM_INTERVAL = 8192;
 
     }
+
 
     private static int validateAndCalculateChunkSize(int pageSize, int maxOrder) {
         if (maxOrder > 14) {

@@ -1,4 +1,4 @@
-package pool;
+package buffer.pool;
 
 public abstract class SizeClasses implements SizeClassesMetric {
 

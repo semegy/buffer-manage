@@ -1,4 +1,4 @@
-package pool;
+package buffer.pool;
 
 import java.util.Arrays;
 

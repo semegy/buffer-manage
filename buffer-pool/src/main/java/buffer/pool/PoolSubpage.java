@@ -1,7 +1,6 @@
-package pool;
+package buffer.pool;
 
-import static pool.PoolChunk.*;
-import static pool.SizeClasses.LOG2_QUANTUM;
+import static buffer.pool.SizeClasses.LOG2_QUANTUM;
 
 public class PoolSubpage<T> {
 
@@ -62,10 +61,10 @@ public class PoolSubpage<T> {
             bitmapLength = maxNumElems >>> 6;
             if ((maxNumElems & 63) != 0) {
                 // 如果 maxNumElems 不是64的倍数，则需要多预留一个long元素
-                bitmapLength ++;
+                bitmapLength++;
             }
 
-            for (int i = 0; i < bitmapLength; i ++) {
+            for (int i = 0; i < bitmapLength; i++) {
                 bitmap[i] = 0;
             }
         }
@@ -74,7 +73,7 @@ public class PoolSubpage<T> {
 
     /**
      * @return {@code true} if this subpage is in use.
-     *         {@code false} if this subpage is not used by its chunk and thus it's OK to be released.
+     * {@code false} if this subpage is not used by its chunk and thus it's OK to be released.
      */
     boolean free(PoolSubpage<T> head, int bitmapIdx) {
         if (elemSize == 0) {
@@ -87,7 +86,7 @@ public class PoolSubpage<T> {
 
         setNextAvail(bitmapIdx);
 
-        if (numAvail ++ == 0) {
+        if (numAvail++ == 0) {
             addToPool(head);
             /* When maxNumElems == 1, the maximum numAvail is also 1.
              * Each of these PoolSubpages will go in here when they do free operation.
@@ -130,6 +129,7 @@ public class PoolSubpage<T> {
         next.prev = this;
         head.next = this;
     }
+
     public long allocate() {
         if (numAvail == 0 || !doNotDestroy) {
             return -1;
@@ -147,7 +147,7 @@ public class PoolSubpage<T> {
         bitmap[q] |= 1L << r;
 
         // 可用存储块减法
-        if (-- numAvail == 0) { // 如果存储块已全部分配完毕，移除此page
+        if (--numAvail == 0) { // 如果存储块已全部分配完毕，移除此page
             removeFromPool();
         }
 
@@ -156,10 +156,10 @@ public class PoolSubpage<T> {
 
     private long toHandle(int bitmapIdx) {
         int pages = runSize >> pageShifts;
-        return (long) runOffset << RUN_OFFSET_SHIFT
-                | (long) pages << SIZE_SHIFT
-                | 1L << IS_USED_SHIFT
-                | 1L << IS_SUBPAGE_SHIFT
+        return (long) runOffset << PoolChunk.RUN_OFFSET_SHIFT
+                | (long) pages << PoolChunk.SIZE_SHIFT
+                | 1L << PoolChunk.IS_USED_SHIFT
+                | 1L << PoolChunk.IS_SUBPAGE_SHIFT
                 | bitmapIdx;
     }
 
@@ -183,7 +183,7 @@ public class PoolSubpage<T> {
     private int findNextAvail() {
         final long[] bitmap = this.bitmap;
         final int bitmapLength = this.bitmapLength;
-        for (int i = 0; i < bitmapLength; i ++) {
+        for (int i = 0; i < bitmapLength; i++) {
             long bits = bitmap[i];
             // ~bits != 0 表示bits是否有0位，没有跳出当前long元素，否则表示当前long的位上有空闲的存储块
             if (~bits != 0) {
@@ -200,7 +200,7 @@ public class PoolSubpage<T> {
         // 第i个long元素的初始位 i*64
         final int baseVal = i << 6;
 
-        for (int j = 0; j < 64; j ++) {
+        for (int j = 0; j < 64; j++) {
             if ((bits & 1) == 0) { // 最低一位是否为0，为1则说明当前bit位没有
                 // 记录bit位在bitMap中的bit位找到空闲的存储块 i*64 + 所在的空闲位
                 int val = baseVal | j;

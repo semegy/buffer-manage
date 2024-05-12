@@ -1,15 +1,19 @@
 package pool;
 
+import buffer.pool.PoolArena;
+import buffer.pool.PooleDirectByteBuf;
+import buffer.pool.PooledBufferAllocate;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.lang.reflect.Method;
+import java.nio.ByteBuffer;
 
 import static org.junit.Assert.assertNotNull;
 
 public class PoolArenaTest {
 
-    private PoolArena<Object> poolArena;
+    private PoolArena<ByteBuffer> poolArena;
     private Method newInstanceMethod;
 
     @Before
@@ -24,7 +28,7 @@ public class PoolArenaTest {
     @Test
     public void testNewInstance() throws Exception {
         for (int i = 0; i < 10; i++) {
-            PooledByteBuf<Object> instance = (PooledByteBuf<Object>) newInstanceMethod.invoke(poolArena, 10);
+            PooleDirectByteBuf instance = (PooleDirectByteBuf) newInstanceMethod.invoke(poolArena, 10);
             // 验证结果是否正确
             assertNotNull(instance);
         }
