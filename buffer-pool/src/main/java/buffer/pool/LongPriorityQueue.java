@@ -1,4 +1,4 @@
-package pool;
+package buffer.pool;
 
 import java.util.Arrays;
 
@@ -8,6 +8,7 @@ public class LongPriorityQueue {
     private long[] array = new long[9];
 
     private int size;
+
     public static LongPriorityQueue[] newRunsAvailQueueArray(int size) {
         LongPriorityQueue[] queueArray = new LongPriorityQueue[size];
         for (int i = 0; i < queueArray.length; i++) {
@@ -23,7 +24,7 @@ public class LongPriorityQueue {
         size++;
         if (size == array.length) {
             // Grow queue capacity.
-            array = Arrays.copyOf(array, array.length*2);
+            array = Arrays.copyOf(array, array.length * 2);
         }
         // 保存可管理的handle
         array[size] = handle;
