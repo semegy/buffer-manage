@@ -12,7 +12,6 @@ public class StringDecoder extends ByteToMessageDecoder {
     protected void handle(ChannelContext context, ByteBuf byteBuf) {
         byte[] bytes = byteBuf.readBytes();
         log.info(new String(bytes));
-        context.write(new String(bytes));
     }
 
 
