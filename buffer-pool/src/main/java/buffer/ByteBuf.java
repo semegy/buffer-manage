@@ -1,13 +1,13 @@
 package buffer;
 
-import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.nio.*;
 import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.SocketChannel;
 
 public interface ByteBuf<T> {
-    void reused(int maxCapacity);
+    void reuse(int maxCapacity);
 
     /**
      * 释放资源
@@ -16,7 +16,10 @@ public interface ByteBuf<T> {
 
     ByteBuf slice();
 
-    ByteBuf duplicate();
+    ByteBuffer slice(int index, int length);
+
+
+    ByteBuf duplicate(int initialBytesToStrip, int frameLengthInt);
 
     ByteBuf asReadOnlyBuffer();
 
@@ -28,7 +31,7 @@ public interface ByteBuf<T> {
 
     ByteBuf put(int index, byte b);
 
-    @NotNull ByteBuf compact();
+    ByteBuf compact();
 
     boolean isReadOnly();
 
@@ -36,63 +39,63 @@ public interface ByteBuf<T> {
 
     char getChar();
 
-    @NotNull ByteBuf putChar(char value);
+    ByteBuf putChar(char value);
 
     char getChar(int index);
 
-    @NotNull ByteBuf putChar(int index, char value);
+    ByteBuf putChar(int index, char value);
 
-    @NotNull CharBuffer asCharBuffer();
+    CharBuffer asCharBuffer();
 
     short getShort();
 
-    @NotNull ByteBuf putShort(short value);
+    ByteBuf putShort(short value);
 
     short getShort(int index);
 
-    @NotNull ByteBuf putShort(int index, short value);
+    ByteBuf putShort(int index, short value);
 
-    @NotNull ShortBuffer asShortBuffer();
+    ShortBuffer asShortBuffer();
 
     int getInt();
 
-    @NotNull ByteBuf putInt(int value);
+    ByteBuf putInt(int value);
 
     int getInt(int index);
 
-    @NotNull ByteBuf putInt(int index, int value);
+    ByteBuf putInt(int index, int value);
 
-    @NotNull IntBuffer asIntBuffer();
+    IntBuffer asIntBuffer();
 
     long getLong();
 
-    @NotNull ByteBuf putLong(long value);
+    ByteBuf putLong(long value);
 
     long getLong(int index);
 
-    @NotNull ByteBuf putLong(int index, long value);
+    ByteBuf putLong(int index, long value);
 
-    @NotNull LongBuffer asLongBuffer();
+    LongBuffer asLongBuffer();
 
     float getFloat();
 
-    @NotNull ByteBuf putFloat(float value);
+    ByteBuf putFloat(float value);
 
     float getFloat(int index);
 
-    @NotNull ByteBuf putFloat(int index, float value);
+    ByteBuf putFloat(int index, float value);
 
-    @NotNull FloatBuffer asFloatBuffer();
+    FloatBuffer asFloatBuffer();
 
     double getDouble();
 
-    @NotNull ByteBuf putDouble(double value);
+    ByteBuf putDouble(double value);
 
     double getDouble(int index);
 
-    @NotNull ByteBuf putDouble(int index, double value);
+    ByteBuf putDouble(int index, double value);
 
-    @NotNull DoubleBuffer asDoubleBuffer();
+    DoubleBuffer asDoubleBuffer();
 
     /**
      * 可写字段
@@ -112,5 +115,33 @@ public interface ByteBuf<T> {
     ByteBuf readBytes(byte[] dst);
 
     ByteBuf readBytes(byte[] dst, int dstIndex, int length);
+
+    int readIndex();
+
+    void setReadIndex(int lengthFieldEndOffset);
+
+    void setWriterIndex(int frameLengthInt);
+
+    void setLength(int length);
+
+    byte[] readBytes();
+
+    void skip(int readerIndex);
+
+    void add(ByteBuf buffer);
+
+    void add(ByteBuf wrapper, int initialBytesToStrip);
+
+    ByteBuf writeByte(int index, byte value);
+
+    ByteBuf writeShort(int index, short value);
+
+    ByteBuf writeInt(int index, int value);
+
+    ByteBuf writeLong(int index, long value);
+
+    ByteBuf writeBytes(byte[] dst, int i, int length);
+
+    ByteBuf writeAndFlush(SocketChannel channel);
 
 }

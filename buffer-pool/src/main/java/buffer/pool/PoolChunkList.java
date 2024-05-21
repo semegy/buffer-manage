@@ -152,7 +152,9 @@ public class PoolChunkList<T> {
         }
     }
 
-    public boolean allocate(PooledByteBuf<T> buf, int reqCapacity, int normCapacity, ThreadLocalCache cache, int sizeIdx) {
+    public boolean allocate(PooledByteBuf<T> buf, int reqCapacity, ThreadLocalCache cache, int sizeIdx) {
+        // normal内存容量
+        int normCapacity = arena.sizeIdx2size(sizeIdx);
         // normal内存容量
         if (normCapacity > maxCapacity) {
             // Either this PoolChunkList is empty or the requested capacity is larger then the capacity which can
@@ -161,7 +163,7 @@ public class PoolChunkList<T> {
         }
 
         for (PoolChunk<T> cur = head; cur != null; cur = cur.next) {
-            if (cur.allocate(buf, reqCapacity, normCapacity, cache, sizeIdx)) {
+            if (cur.allocate(buf, reqCapacity, cache, sizeIdx)) {
                 if (cur.freeBytes <= freeMinThreshold) {
                     // 利用率增加，转移的更容易寻址的ChunkList中
                     remove(cur);

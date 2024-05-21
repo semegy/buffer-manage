@@ -1,4 +1,4 @@
-import nio.SimpleEventHandler;
+import org.junit.Test;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -14,9 +14,10 @@ import java.util.logging.Logger;
 
 public class SocketClient {
 
-    public static Logger logger = Logger.getLogger(SimpleEventHandler.class.getName());
+    public static Logger logger = Logger.getLogger(SocketClient.class.getName());
 
-    public static void main(String[] args) throws IOException, InterruptedException {
+    @Test
+    public static void main(String[] args) throws IOException {
         //打开选择器
         Selector selector = Selector.open();
         //打开通道
@@ -38,7 +39,24 @@ public class SocketClient {
                         finalSocketChannel1.close();
                         break;
                     }
-                    finalSocketChannel1.write(ByteBuffer.wrap(next.getBytes(StandardCharsets.UTF_8)));
+                    ByteBuffer wrapper = ByteBuffer.allocate(1024);
+                    wrapper.put(new byte[]{0, 20}); // 假设长度字段表示帧长度
+                    wrapper.put("1234567890".getBytes(StandardCharsets.UTF_8));
+                    wrapper.put("1234567890".getBytes(StandardCharsets.UTF_8));
+                    wrapper.put(new byte[]{0, 20}); // 假设长度字段表示帧长度
+                    wrapper.put("1234567890".getBytes(StandardCharsets.UTF_8));
+                    wrapper.put("1234567890".getBytes(StandardCharsets.UTF_8));
+                    wrapper.put(new byte[]{0, 20}); // 假设长度字段表示帧长度
+                    wrapper.put("1234567890".getBytes(StandardCharsets.UTF_8));
+                    wrapper.put("1234567890".getBytes(StandardCharsets.UTF_8));
+                    wrapper.put(new byte[]{0, 20}); // 假设长度字段表示帧长度
+                    wrapper.put("1234567890".getBytes(StandardCharsets.UTF_8));
+                    wrapper.flip();
+                    finalSocketChannel1.write(wrapper);
+                    ByteBuffer wrapper2 = ByteBuffer.allocate(1024);
+                    wrapper2.put("1234567890".getBytes(StandardCharsets.UTF_8));
+                    wrapper2.flip();
+                    finalSocketChannel1.write(wrapper2);
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
@@ -73,18 +91,6 @@ public class SocketClient {
                     }
                 }
                 iter.remove();
-            }
-        }
-    }
-
-    public static void run(SocketChannel socketChannel) {
-        while (true) {
-            Scanner scanner = new Scanner(System.in);
-            String next = scanner.next();
-            try {
-                socketChannel.write(ByteBuffer.wrap(next.getBytes(StandardCharsets.UTF_8)));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
             }
         }
     }

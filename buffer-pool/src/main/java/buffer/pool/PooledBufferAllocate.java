@@ -31,8 +31,10 @@ public class PooledBufferAllocate implements BufferAllocate {
     private static final int DEFAULT_DIRECT_MEMORY_CACHE_ALIGNMENT;
     private static final int MAX_CHUNK_SIZE = (int) (((long) Integer.MAX_VALUE + 1) / 2);
 
-    private static final int DEFAULT_MAX_ORDER; // 8192 << 9 = 4 MiB per chunk
-    private static final int DEFAULT_SMALL_CACHE_SIZE = 256;
+    public static final int DEFAULT_MAX_ORDER; // 8192 << 9 = 4 MiB per chunk
+    public static final int DEFAULT_SMALL_CACHE_SIZE = 256;
+
+    public static final int DEFAULT_NORMAL_CACHE_SIZE = 64;
     private final int smallCacheSize;
 
     private final int normalCacheSize;
@@ -422,6 +424,7 @@ public class PooledBufferAllocate implements BufferAllocate {
         return new PoolArena[nDirectArena];
     }
 
+    @Override
     public ByteBuf allocate() {
         return this.handle.allocate();
     }

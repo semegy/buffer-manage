@@ -1,23 +1,32 @@
-import nio.EventHandlerContext;
-import nio.HandlerInvoker;
-import nio.NioReactorEndpoint;
-import nio.SimpleEventHandler;
+import channel.ChannelContainer;
+import channel.ChannelContext;
+import channel.message.HandlerInitializer;
+import channel.message.StringDecoder;
+import channel.message.StringEncoder;
+import org.junit.Test;
 
-import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.channels.ServerSocketChannel;
 
 public class SocketService {
     public static boolean done = false;
 
-    public static void main(String[] args) throws IOException, InterruptedException {
-        ServerSocketChannel serverSocketChannel = ServerSocketChannel.open();
-        EventHandlerContext context = new EventHandlerContext(new SimpleEventHandler(), null, null, new HandlerInvoker());
-        NioReactorEndpoint nioReactorEndpoint = new NioReactorEndpoint(serverSocketChannel, context);
-        nioReactorEndpoint.start();
-        synchronized (serverSocketChannel) {
+    @Test
+    public void test() throws InterruptedException {
+        HandlerInitializer initializer = new HandlerInitializer() {
+            @Override
+            public void initHandler(ChannelContext context) {
+                context.addHandler(new StringDecoder(Integer.MAX_VALUE, 0, 2, 0, 2))
+                        .addHandler(new StringEncoder(Integer.MAX_VALUE, 0, 2, 0, 2));
+            }
+        };
+        InetSocketAddress address = new InetSocketAddress(80);
+        ChannelContainer context = new ChannelContainer(initializer, 16, address, ServerSocketChannel.class);
+        context.start();
+        synchronized (context) {
             // 未结束
             while (!done) {
-                serverSocketChannel.wait();
+                context.wait();
             }
         }
     }

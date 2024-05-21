@@ -5,7 +5,7 @@ import static buffer.pool.SizeClasses.LOG2_QUANTUM;
 public class PoolSubpage<T> {
 
     private final int pageShifts /*13*/;
-    private final int elemSize /*2048*/;
+    public final int elemSize /*2048*/;
     /**
      * 当前子页所属chunk区
      */

@@ -53,6 +53,11 @@ public abstract class PooledByteBuf<T> extends AbstractByteBuf<T> {
         this.maxLength = maxLength;
     }
 
+    public final void reuse(int maxCapacity) {
+        maxCapacity(maxCapacity);
+        setIndex0(0, 0);
+    }
+
     private void recycle() {
         recyclerHandle.recycle(this);
     }
@@ -80,6 +85,9 @@ public abstract class PooledByteBuf<T> extends AbstractByteBuf<T> {
         return this;
     }
 
+    public void lastBytesRead() {
+    }
+
     @Override
     public final ByteBuffer internalNioBuffer(int index, int length) {
 //        checkIndex(index, length);
@@ -88,7 +96,6 @@ public abstract class PooledByteBuf<T> extends AbstractByteBuf<T> {
 
     public final ByteBuffer _internalNioBuffer(int index, int length, boolean duplicate) {
         ByteBuffer buffer = duplicate ? newInternalNioBuffer(memory) : internalNioBuffer();
-        buffer.limit(index + length).position(internalPosition(index));
         return buffer;
     }
 
@@ -102,9 +109,18 @@ public abstract class PooledByteBuf<T> extends AbstractByteBuf<T> {
         return tmpNioBuf;
     }
 
+    @Override
+    public ByteBuf writeBytes(byte[] dst, int index, int length) {
+        ByteBuffer byteBuffer = internalNioBuffer(index, length);
+        byteBuffer.position(index);
+        byteBuffer.limit(index + length);
+        this.buffer.put(dst);
+        return this;
+    }
+
 
     private int internalPosition(int index) {
-        return offset + index;
+        return index;
     }
 
 }

@@ -17,6 +17,11 @@ public class PooleDirectByteBuf extends PooledByteBuf<ByteBuffer> {
     }
 
     @Override
+    public void setLength(int length) {
+        this.length = length;
+    }
+
+    @Override
     protected ByteBuffer newInternalNioBuffer(ByteBuffer memory) {
         return memory.duplicate();
     }

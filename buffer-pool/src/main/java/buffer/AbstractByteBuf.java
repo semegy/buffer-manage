@@ -1,15 +1,15 @@
 package buffer;
 
-import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.nio.*;
 import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.SocketChannel;
 
 
 public abstract class AbstractByteBuf<T> implements ByteBuf {
     protected ByteBuffer buffer;
-    protected WrapperByteBuf root = null;
+    static protected WrapperByteBuf root = new WrapperByteBuf();
 
     // 读索引
     public int readerIndex;
@@ -23,10 +23,15 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
         this.buffer = buffer;
     }
 
-    @Override
-    public void reused(int maxCapacity) {
-
+    protected final void maxCapacity(int maxCapacity) {
+        this.maxCapacity = maxCapacity;
     }
+
+    public final void setIndex0(int readerIndex, int writerIndex) {
+        this.readerIndex = readerIndex;
+        this.writerIndex = writerIndex;
+    }
+
 
     @Override
     public void deallocate() {
@@ -43,9 +48,57 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
     }
 
     @Override
-    public ByteBuf duplicate() {
+    public ByteBuffer slice(int index, int length) {
+        ByteBuffer byteBuffer = internalNioBuffer(index, length);
+        return byteBuffer;
+    }
+
+    public byte[] readBytes() {
+        byte[] dst = new byte[capacity()];
+        this.buffer.position(readerIndex);
+        this.buffer.limit(writerIndex);
+        this.buffer.get(dst);
+        return dst;
+    }
+
+    @Override
+    public void skip(int readerIndex) {
+        this.readerIndex += readerIndex;
+        setLength(writerIndex - this.readerIndex);
+        this.buffer.position(readerIndex);
+    }
+
+    @Override
+    public void add(ByteBuf buffer) {
+
+    }
+
+    @Override
+    public void add(ByteBuf buffer, int initialBytesToStrip) {
+
+    }
+
+    @Override
+    public int readIndex() {
+        return readerIndex;
+    }
+
+    public void setReadIndex(int readerIndex) {
+        this.readerIndex = readerIndex;
+    }
+
+    public void setWriterIndex(int writerIndex) {
+        this.writerIndex = writerIndex;
+    }
+
+    @Override
+    public ByteBuf duplicate(int initialBytesToStrip, int frameLengthInt) {
         ByteBuffer newBuffer = this.buffer.duplicate();
-        return wrapperBuffer(newBuffer);
+        ByteBuf wrapperBuffer = wrapperBuffer(newBuffer);
+        wrapperBuffer.setReadIndex(this.readerIndex + initialBytesToStrip);
+        wrapperBuffer.setWriterIndex(this.readerIndex + initialBytesToStrip + frameLengthInt);
+        wrapperBuffer.setLength(frameLengthInt - initialBytesToStrip);
+        return wrapperBuffer;
     }
 
     ByteBuf wrapperBuffer(ByteBuffer newBuffer) {
@@ -71,7 +124,7 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
 
     @Override
     public byte get(int index) {
-        return buffer.get(index);
+        return buffer.get(this.readIndex() + index);
     }
 
     @Override
@@ -80,7 +133,6 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
         return wrapperBuffer(newBuffer);
     }
 
-    @NotNull
     @Override
     public ByteBuf compact() {
         ByteBuffer newBuffer = buffer.compact();
@@ -102,7 +154,6 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
         return buffer.getChar();
     }
 
-    @NotNull
     @Override
     public ByteBuf putChar(char value) {
         ByteBuffer newBuffer = buffer.putChar(value);
@@ -114,14 +165,12 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
         return buffer.getChar(index);
     }
 
-    @NotNull
     @Override
     public ByteBuf putChar(int index, char value) {
         ByteBuffer newBuffer = buffer.putChar(index, value);
         return wrapperBuffer(newBuffer);
     }
 
-    @NotNull
     @Override
     public CharBuffer asCharBuffer() {
         return buffer.asCharBuffer();
@@ -132,7 +181,6 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
         return buffer.getShort();
     }
 
-    @NotNull
     @Override
     public ByteBuf putShort(short value) {
         ByteBuffer newBuffer = buffer.putShort(value);
@@ -141,17 +189,15 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
 
     @Override
     public short getShort(int index) {
-        return buffer.getShort(index);
+        return buffer.getShort(this.readerIndex + index);
     }
 
-    @NotNull
     @Override
     public ByteBuf putShort(int index, short value) {
         buffer.putShort(index, value);
         return this;
     }
 
-    @NotNull
     @Override
     public ShortBuffer asShortBuffer() {
         return buffer.asShortBuffer();
@@ -162,7 +208,6 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
         return buffer.getInt();
     }
 
-    @NotNull
     @Override
     public ByteBuf putInt(int value) {
         ByteBuffer newBuffer = buffer.putInt(value);
@@ -171,17 +216,15 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
 
     @Override
     public int getInt(int index) {
-        return buffer.getInt(index);
+        return buffer.getInt(this.readerIndex + index);
     }
 
-    @NotNull
     @Override
     public ByteBuf putInt(int index, int value) {
         ByteBuffer newBuffer = buffer.putInt(index, value);
         return wrapperBuffer(newBuffer);
     }
 
-    @NotNull
     @Override
     public IntBuffer asIntBuffer() {
         return buffer.asIntBuffer();
@@ -192,7 +235,6 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
         return buffer.getLong();
     }
 
-    @NotNull
     @Override
     public ByteBuf putLong(long value) {
         ByteBuffer newBuffer = buffer.putLong(value);
@@ -201,17 +243,15 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
 
     @Override
     public long getLong(int index) {
-        return buffer.getLong(index);
+        return buffer.getLong(readerIndex + index);
     }
 
-    @NotNull
     @Override
     public ByteBuf putLong(int index, long value) {
         ByteBuffer newBuffer = buffer.putLong(index, value);
         return wrapperBuffer(newBuffer);
     }
 
-    @NotNull
     @Override
     public LongBuffer asLongBuffer() {
         return buffer.asLongBuffer();
@@ -222,7 +262,6 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
         return buffer.getFloat();
     }
 
-    @NotNull
     @Override
     public ByteBuf putFloat(float value) {
         ByteBuffer newBuffer = buffer.putFloat(value);
@@ -234,14 +273,12 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
         return buffer.getFloat(index);
     }
 
-    @NotNull
     @Override
     public ByteBuf putFloat(int index, float value) {
         ByteBuffer newBuffer = buffer.putFloat(index, value);
         return wrapperBuffer(newBuffer);
     }
 
-    @NotNull
     @Override
     public FloatBuffer asFloatBuffer() {
         return buffer.asFloatBuffer();
@@ -252,7 +289,6 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
         return buffer.getDouble();
     }
 
-    @NotNull
     @Override
     public ByteBuf putDouble(double value) {
         ByteBuffer newBuffer = buffer.putDouble(value);
@@ -264,14 +300,12 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
         return buffer.getDouble(index);
     }
 
-    @NotNull
     @Override
     public ByteBuf putDouble(int index, double value) {
         ByteBuffer newBuffer = buffer.putDouble(index, value);
         return wrapperBuffer(newBuffer);
     }
 
-    @NotNull
     @Override
     public DoubleBuffer asDoubleBuffer() {
         return buffer.asDoubleBuffer();
@@ -294,6 +328,7 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
         if (writtenBytes > 0) {
             writerIndex += writtenBytes;
         }
+        setLength(writerIndex - readerIndex);
         return writtenBytes;
     }
 
@@ -306,10 +341,48 @@ public abstract class AbstractByteBuf<T> implements ByteBuf {
 
     protected abstract ByteBuffer newInternalNioBuffer(T memory);
 
-
     public abstract ByteBuffer internalNioBuffer(int index, int length);
 
     protected abstract ByteBuffer _internalNioBuffer(int index, int length, boolean duplicate);
 
     protected abstract ByteBuffer newInternalNioBuffer(ByteBuffer memory);
+
+    public ByteBuf writeByte(int index, byte value) {
+        this.buffer.put(index, value);
+        return this;
+    }
+
+    public ByteBuf writeShort(int index, short value) {
+        this.buffer.putShort(index, value);
+        return this;
+    }
+
+    public ByteBuf writeInt(int index, int value) {
+        this.buffer.putInt(index, value);
+        return this;
+    }
+
+    public ByteBuf writeLong(int index, long value) {
+        this.buffer.putLong(index, value);
+        return this;
+    }
+
+    @Override
+    public ByteBuf writeBytes(byte[] dst, int index, int length) {
+        this.buffer.position(index);
+        this.buffer.put(dst, index, length);
+        return this;
+    }
+
+    @Override
+    public ByteBuf writeAndFlush(SocketChannel channel) {
+        this.buffer.position(0);
+        this.buffer.limit(writerIndex);
+        try {
+            channel.write(buffer);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return this;
+    }
 }

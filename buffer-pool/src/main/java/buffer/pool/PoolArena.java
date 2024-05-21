@@ -183,7 +183,7 @@ public class PoolArena<T> extends SizeClasses {
 
     private PooledByteBuf<T> newInstance(int maxCapacity) {
         PooledByteBuf buf = recycler.get();
-        buf.reused(maxCapacity);
+        buf.reuse(maxCapacity);
         return buf;
     }
 
@@ -196,19 +196,18 @@ public class PoolArena<T> extends SizeClasses {
     }
 
     private void allocate(ThreadLocalCache cache, PooledByteBuf<T> buf, int reqCapacity, int sizeIdx) {
-        int runSize = sizeIdx2size(sizeIdx);
         synchronized (this) {
             // 挨个从不同使用率的chunkList中获取normal大小的内存空间，获取不到则重新建立一个新chunk分配内存
-            if (q050.allocate(buf, reqCapacity, runSize, cache, sizeIdx) ||
-                    q025.allocate(buf, reqCapacity, runSize, cache, sizeIdx) ||
-                    q000.allocate(buf, reqCapacity, runSize, cache, sizeIdx) ||
-                    qInit.allocate(buf, reqCapacity, runSize, cache, sizeIdx) ||
-                    q075.allocate(buf, reqCapacity, runSize, cache, sizeIdx)) {
+            if (q050.allocate(buf, reqCapacity, cache, sizeIdx) ||
+                    q025.allocate(buf, reqCapacity, cache, sizeIdx) ||
+                    q000.allocate(buf, reqCapacity, cache, sizeIdx) ||
+                    qInit.allocate(buf, reqCapacity, cache, sizeIdx) ||
+                    q075.allocate(buf, reqCapacity, cache, sizeIdx)) {
                 return;
             }
             // Add a new chunk.
             PoolChunk<T> poolChunk = newChunk(pageSize, nPSizes, pageShifts, chunkSize);
-            poolChunk.allocate(buf, reqCapacity, runSize, cache, sizeIdx);
+            poolChunk.allocate(buf, reqCapacity, cache, sizeIdx);
             qInit.add(poolChunk);
         }
     }

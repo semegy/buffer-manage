@@ -18,6 +18,7 @@ public interface BufferAllocate {
 
     int calculateNewCapacity(int targetCapacity, int maxCapacity);
 
+    public ByteBuf allocate();
 
     @Deprecated
     public interface Handle {

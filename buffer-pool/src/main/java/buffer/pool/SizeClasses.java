@@ -346,10 +346,7 @@ public abstract class SizeClasses implements SizeClassesMetric {
         // log2Delta = log2Group - LOG2_SIZE_CLASS_GROUP = log2Size - 1 - LOG2_SIZE_CLASS_GROUP
         int log2Size = log2((size << 1) - 1);
         // 第一组默认 0
-        int shift = log2Size < LOG2_SIZE_CLASS_GROUP +
-
-
-                +1
+        int shift = log2Size < LOG2_SIZE_CLASS_GROUP + LOG2_QUANTUM + 1
                 ? 0 : log2Size - (LOG2_SIZE_CLASS_GROUP + LOG2_QUANTUM);
         // 组内所在第一个内存块索引
         int group = shift << LOG2_SIZE_CLASS_GROUP;

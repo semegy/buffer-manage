@@ -146,14 +146,15 @@ final public class PoolChunk<T> implements Chunk {
         return ByteBuffer.allocateDirect(capacity);
     }
 
-    public boolean allocate(PooledByteBuf<T> buf, int reqCapacity, int runSize, ThreadLocalCache cache, int sizeIdx) {
+    public boolean allocate(PooledByteBuf<T> buf, int reqCapacity, ThreadLocalCache cache, int sizeIdx) {
         final long handle;
         if (sizeIdx <= arena.smallMaxSizeIdx) {
             // subpage分配
-            handle = allocateSubpage(runSize, sizeIdx);
+            handle = allocateSubpage(sizeIdx);
         } else {
             // 超出子页大小的 normal分配机制
             // runSize must be multiple of pageSize
+            int runSize = arena.sizeIdx2size(sizeIdx);
             handle = allocateNormal(runSize);
             assert !isSubpage(handle);
         }
@@ -169,16 +170,16 @@ final public class PoolChunk<T> implements Chunk {
      * Create / initialize a new PoolSubpage of normCapacity. Any PoolSubpage created / initialized here is added to
      * subpage pool in the PoolArena that owns this PoolChunk
      *
-     * @param runSize
      * @return index in memoryMap
      */
-    private long allocateSubpage(int runSize, int sizeIdx) {
+    private long allocateSubpage(int sizeIdx) {
         // Obtain the head of the PoolSubPage pool that is owned by the PoolArena and synchronize on it.
         // This is need as we may add it back and so alter the linked-list structure.
         PoolSubpage<T> head = arena.findSubpagePoolHead(sizeIdx);
         synchronized (head) {
             //allocate a new run
             // 规格化计算出runSize
+            int runSize = calculateRunSize(sizeIdx);
             //runSize must be multiples of pageSize
             long runHandle = allocateRun(runSize);
             if (runHandle < 0) {
@@ -486,7 +487,19 @@ final public class PoolChunk<T> implements Chunk {
         pinnedBytes.add(-delta);
     }
 
-    public void initBufWithSubpage(PooledByteBuf<T> buf, Object o, long handle, int reqCapacity, ThreadLocalCache cache) {
+    public void initBufWithSubpage(PooledByteBuf<T> buf, ByteBuffer nioBuffer, long handle, int reqCapacity, ThreadLocalCache cache) {
+        // subPages索引页
+        int runOffset = runOffset(handle);
+        // 所在的存储块索引 handle低32位
+        int bitmapIdx = bitmapIdx(handle);
 
+        // subPage获取runOffset
+        PoolSubpage<T> s = subpages[runOffset];
+//        assert s.doNotDestroy;
+//        assert reqCapacity <= s.elemSize : reqCapacity + "<=" + s.elemSize;
+
+        // 地址偏移量 = 索引页 * 8K + 当前页的bitMap索引位*内存块的偏移地址
+        int offset = (runOffset << pageShifts) + bitmapIdx * s.elemSize;
+        buf.init(this, nioBuffer, handle, offset, reqCapacity, s.elemSize, cache);
     }
 }
