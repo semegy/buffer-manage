@@ -1,8 +1,6 @@
 package channel.nio;
 
 import channel.ChannelContext;
-import channel.message.EventHandler;
-import channel.message.HeadHandler;
 
 import java.io.IOException;
 import java.nio.channels.ClosedChannelException;
@@ -16,9 +14,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import static java.nio.channels.SelectionKey.OP_ACCEPT;
 
 public class NioReactorEndpoint extends ReactorEndpoint {
-
-    public static EventHandler HEAD_HANDLER = new HeadHandler();
-
     Selector selector;
 
     SelectableChannel socketChannel;

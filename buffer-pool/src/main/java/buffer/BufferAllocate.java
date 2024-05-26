@@ -11,7 +11,7 @@ public interface BufferAllocate {
     // MTU 分包最大长度
     static final int DEFAULT_INITIAL = 2048;
     // 默认最大次数
-    static final int DEFAULT_MAXIMUM = 65536;
+    static final int DEFAULT_MAXIMUM = 2048;
     static final int DEFAULT_MAX_CAPACITY = Integer.MAX_VALUE;
 
     public ByteBuf ioBuffer(int initialCapacity);

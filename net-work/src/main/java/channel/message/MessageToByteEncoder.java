@@ -17,11 +17,11 @@ public abstract class MessageToByteEncoder<T> extends AbstractEventHandler<T> {
     // 长度字段在帧中的偏移量
     int lengthFieldOffset;
     // 长度字段的长度
-    int lengthFieldLength;
+    public int lengthFieldLength;
     // 对长度字段值的调整量
     int lengthAdjustment;
     // 解码后要从帧前剥离的初始字节数
-    int initialBytesToStrip;
+    public int initialBytesToStrip;
 
 
     public MessageToByteEncoder(int maxFrameLength, int lengthFieldOffset, int lengthFieldLength, int lengthAdjustment, int initialBytesToStrip) {

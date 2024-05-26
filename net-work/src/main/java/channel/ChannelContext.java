@@ -2,10 +2,13 @@ package channel;
 
 import buffer.ByteBuf;
 import channel.message.EventHandler;
+import channel.message.HeadHandler;
 import channel.nio.NioReactorEndpoint;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.channels.*;
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
 import static channel.ChannelContainer.bufferAllocate;
 
@@ -15,9 +18,12 @@ public class ChannelContext<T extends SelectableChannel> {
     T channel;
     NioReactorEndpoint execute;
     Selector select;
-    EventHandler handler = NioReactorEndpoint.HEAD_HANDLER;
+    public final EventHandler HEAD_HANDLER = new HeadHandler();
 
     Object attachment;
+    volatile private int state;
+
+    AtomicIntegerFieldUpdater stateUpdater = AtomicIntegerFieldUpdater.newUpdater(ChannelContext.class, "state");
 
     public ChannelContext(ChannelContainer container, T channel) {
         this.channel = channel;
@@ -40,14 +46,16 @@ public class ChannelContext<T extends SelectableChannel> {
             ChannelContext channelContext = new ChannelContext(container, socketChannel);
             channelContext.register(SelectionKey.OP_READ);
             channelContext.loop();
-            handler.accept(channelContext);
+            HEAD_HANDLER.accept(channelContext);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
     private void loop() {
-        this.execute.start();
+        if (this.state == 0 && stateUpdater.compareAndSet(this, 0, 1)) {
+            this.execute.start();
+        }
     }
 
     public void register(int ops) {
@@ -56,34 +64,52 @@ public class ChannelContext<T extends SelectableChannel> {
 
     public void invokerRead() {
         ByteBuf byteBuf = bufferAllocate.allocate();
-        handler.read(this, byteBuf);
+        HEAD_HANDLER.read(this, byteBuf);
     }
 
     public void invokerWrite() {
         try {
-            handler.write(this, attachment);
+            HEAD_HANDLER.write(this, attachment);
         } catch (Exception e) {
-            handler.exception(this, e);
+            HEAD_HANDLER.exception(this, e);
         }
     }
 
     public void write(Object obj) {
         try {
-            handler.write(this, obj);
+            HEAD_HANDLER.write(this, obj);
         } catch (Exception e) {
-            handler.exception(this, e);
+            e.printStackTrace();
+            HEAD_HANDLER.exception(this, e);
         }
     }
 
-    public void invokerConnect(ChannelWrapper wrapper) {
-    }
-
     public ChannelContext<T> addHandler(EventHandler handler) {
-        this.handler.handleAdd(handler);
+        this.HEAD_HANDLER.handleAdd(handler);
         return this;
     }
 
     public T channel() {
         return channel;
     }
+
+    public ChannelContext<T> connect(InetSocketAddress address) {
+        try {
+            SocketChannel ch = (SocketChannel) this.channel;
+            boolean connect = ch.connect(address);
+            do {
+                ch.finishConnect();
+                connect = ch.isConnected();
+            } while (!connect);
+
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        //注册事件
+        execute.selector();
+        execute.start();
+        this.register(SelectionKey.OP_READ);
+        return this;
+    }
+
 }

@@ -16,7 +16,7 @@ public class TailHandler implements EventHandler<ByteBuf> {
 
     @Override
     public void read(ChannelContext context, ByteBuf byteBuf) {
-
+        byteBuf.deallocate();
     }
 
     @Override
@@ -58,6 +58,6 @@ public class TailHandler implements EventHandler<ByteBuf> {
     public void write(ChannelContext ctx, ByteBuf out) {
         SocketChannel channel = (SocketChannel) ctx.channel();
         out.writeAndFlush(channel);
-//        out.release();
+        out.deallocate();
     }
 }

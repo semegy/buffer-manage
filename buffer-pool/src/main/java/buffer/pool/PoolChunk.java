@@ -226,9 +226,13 @@ final public class PoolChunk<T> implements Chunk {
     }
 
     public void initBuf(PooledByteBuf<T> buf, ByteBuffer nioBuffer, long handle, int reqCapacity, ThreadLocalCache cache) {
-        int maxLength = runSize(pageShifts, handle);
-        buf.init(this, nioBuffer, handle, runOffset(handle) << pageShifts,
-                reqCapacity, maxLength, cache);
+        if (isSubpage(handle)) {
+            initBufWithSubpage(buf, nioBuffer, handle, reqCapacity, cache);
+        } else {
+            int maxLength = runSize(pageShifts, handle);
+            buf.init(this, nioBuffer, handle, runOffset(handle) << pageShifts,
+                    reqCapacity, maxLength, arena.parent.threadCache());
+        }
     }
 
     public static boolean isSubpage(long handle) {

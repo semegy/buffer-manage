@@ -7,7 +7,6 @@ import channel.nio.NioReactorEndpoint;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.SocketAddress;
 import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
@@ -42,24 +41,18 @@ public class ChannelContainer<T extends SelectableChannel> {
         boos.start();
     }
 
-    public void connect(SocketAddress address, HandlerInitializer initializer) {
-        SocketChannel socketChannel = (SocketChannel) channel;
+    public ChannelContext<SelectableChannel> connect(InetSocketAddress address) {
         try {
-            socketChannel.connect(address);
-            while (!socketChannel.finishConnect()) {
-                System.out.println("成功");
-            }
-
+            SocketChannel socketChannel = SocketChannel.open();
+            socketChannel.configureBlocking(false);
+            ChannelContext<SelectableChannel> context = new ChannelContext<>(this, socketChannel);
+            context.connect(address);
+            return context;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-
-        //注册事件
-        ChannelContext channelContext = new ChannelContext(this);
-        channelContext.register(SelectionKey.OP_READ);
-        initializer.initHandler(channelContext);
-        boos.start();
     }
+
 
     class EndpointChooser {
         final AtomicInteger nextEndpointIndex = new AtomicInteger(0);
@@ -97,37 +90,32 @@ public class ChannelContainer<T extends SelectableChannel> {
         }
     }
 
-    void initChannel(Class<T> channelClass, InetSocketAddress address) {
-        if (channelClass.equals(ServerSocketChannel.class)) {
-            try {
-                this.channel = (T) ServerSocketChannel.open().bind(address);
-                channel.configureBlocking(false);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        } else {
-            try {
-                this.channel = (T) SocketChannel.open();
-                channel.configureBlocking(false);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+    void initChannel(InetSocketAddress address) {
+        boos = new NioReactorEndpoint();
+        try {
+            this.channel = (T) ServerSocketChannel.open().bind(address);
+            channel.configureBlocking(false);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 
-    public ChannelContainer(HandlerInitializer initializer, int groupSize, InetSocketAddress address, Class<T> channelClass) {
-        this.handlerInitializer = initializer;
-        if (groupSize != 0) {
-            NEXT_ENDPOINT_INDEX_MAX = groupSize << 8;
-            chooser = (groupSize & -groupSize) == groupSize ? new PowerOfTwoEndpointChooser(groupSize) : new EndpointChooser(groupSize);
-        }
-        bufferAllocate = new PooledBufferAllocate(groupSize, PAGE_SIZE, DEFAULT_MAX_ORDER, DEFAULT_SMALL_CACHE_SIZE, DEFAULT_NORMAL_CACHE_SIZE, true);
-        initChannel(channelClass, address);
+    public ChannelContainer(HandlerInitializer initializer, int groupSize, InetSocketAddress address) {
+        this(initializer, groupSize);
         boos = new NioReactorEndpoint();
+        initChannel(address);
+    }
+
+    public ChannelContainer(HandlerInitializer initializer, int groupSize) {
+        this.handlerInitializer = initializer;
+        groupSize = groupSize <= 0 ? 1 : groupSize;
+        NEXT_ENDPOINT_INDEX_MAX = groupSize << 8;
+        chooser = (groupSize & -groupSize) == groupSize ? new PowerOfTwoEndpointChooser(groupSize) : new EndpointChooser(groupSize);
         workerGroup = new NioReactorEndpoint[groupSize];
         for (int i = 0; i < groupSize; i++) {
             workerGroup[i] = new NioReactorEndpoint();
         }
+        bufferAllocate = new PooledBufferAllocate(groupSize, PAGE_SIZE, DEFAULT_MAX_ORDER, DEFAULT_SMALL_CACHE_SIZE, DEFAULT_NORMAL_CACHE_SIZE, true);
     }
 
 }

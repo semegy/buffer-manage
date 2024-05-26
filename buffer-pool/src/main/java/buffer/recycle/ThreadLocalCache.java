@@ -149,10 +149,17 @@ public class ThreadLocalCache {
             case Normal:
                 return cacheForNormal(area, sizeIdx);
             case Small:
-//                return cacheForSmall(area, sizeIdx);
+                return cacheForSmall(area, sizeIdx);
             default:
                 throw new Error();
         }
+    }
+
+    private MemoryRegionCache<?> cacheForSmall(PoolArena<?> area, int sizeIdx) {
+//        if (area.isDirect()) {
+        return cache(smallSubPageDirectCaches, sizeIdx);
+//        }
+//        return cache(smallSubPageHeapCaches, sizeIdx);
     }
 
     private MemoryRegionCache<?> cacheForNormal(PoolArena<?> area, int sizeIdx) {

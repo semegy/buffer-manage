@@ -6,7 +6,6 @@ import channel.message.StringEncoder;
 import org.junit.Test;
 
 import java.net.InetSocketAddress;
-import java.nio.channels.ServerSocketChannel;
 
 public class SocketService {
     public static boolean done = false;
@@ -20,8 +19,8 @@ public class SocketService {
                         .addHandler(new StringEncoder(Integer.MAX_VALUE, 0, 2, 0, 2));
             }
         };
-        InetSocketAddress address = new InetSocketAddress(80);
-        ChannelContainer context = new ChannelContainer(initializer, 16, address, ServerSocketChannel.class);
+        InetSocketAddress address = new InetSocketAddress("localhost", 80);
+        ChannelContainer context = new ChannelContainer(initializer, 16, address);
         context.start();
         synchronized (context) {
             // 未结束
