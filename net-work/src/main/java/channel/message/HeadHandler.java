@@ -69,6 +69,6 @@ public class HeadHandler extends AbstractEventHandler {
 
     @Override
     public void exception(ChannelContext context, Throwable e) {
-
+        context.close();
     }
 }

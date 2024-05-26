@@ -12,10 +12,10 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
 import static channel.ChannelContainer.bufferAllocate;
 
-public class ChannelContext<T extends SelectableChannel> {
-
+public class ChannelContext {
+    Thread currentThread = Thread.currentThread();
     ChannelContainer container;
-    T channel;
+    SelectableChannel channel;
     NioReactorEndpoint execute;
     Selector select;
     public final EventHandler HEAD_HANDLER = new HeadHandler();
@@ -23,16 +23,21 @@ public class ChannelContext<T extends SelectableChannel> {
     Object attachment;
     volatile private int state;
 
+    // 避免重复连接
+    boolean lockReconnect = false;
+
+    public volatile boolean connected;
+
     AtomicIntegerFieldUpdater stateUpdater = AtomicIntegerFieldUpdater.newUpdater(ChannelContext.class, "state");
 
-    public ChannelContext(ChannelContainer container, T channel) {
+    public ChannelContext(ChannelContainer container, SelectableChannel channel) {
         this.channel = channel;
         this.execute = container.nextEndpoint();
         select = execute.selector();
         container.handlerInitializer.initHandler(this);
     }
 
-    public ChannelContext(ChannelContainer<T> container) {
+    public ChannelContext(ChannelContainer container) {
         this.container = container;
         this.channel = container.channel;
         this.execute = container.boos;
@@ -84,32 +89,73 @@ public class ChannelContext<T extends SelectableChannel> {
         }
     }
 
-    public ChannelContext<T> addHandler(EventHandler handler) {
+    public ChannelContext addHandler(EventHandler handler) {
         this.HEAD_HANDLER.handleAdd(handler);
         return this;
     }
 
-    public T channel() {
+    public SelectableChannel channel() {
         return channel;
     }
 
-    public ChannelContext<T> connect(InetSocketAddress address) {
+    public ChannelContext connect(InetSocketAddress address) {
         try {
             SocketChannel ch = (SocketChannel) this.channel;
-            boolean connect = ch.connect(address);
-            do {
-                ch.finishConnect();
-                connect = ch.isConnected();
-            } while (!connect);
-
+            connected = ch.connect(address);
+            if (ch.finishConnect()) {
+                // 成功
+            }
+            //注册事件
+            execute.selector();
+            execute.start();
+            this.register(SelectionKey.OP_READ);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        //注册事件
-        execute.selector();
-        execute.start();
-        this.register(SelectionKey.OP_READ);
+
         return this;
     }
 
+    public void invokerCompleteConnect() {
+        SocketChannel ch = (SocketChannel) this.channel;
+        try {
+            boolean connected = ch.isConnected();
+            while (!connected) {
+                connected = ch.finishConnect();
+                if (connected) {
+                    currentThread.notify();
+                }
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void close() {
+        SocketChannel ch = (SocketChannel) this.channel;
+        try {
+            ch.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public boolean isConnected() {
+        return ((SocketChannel) channel).isConnected();
+    }
+
+    public boolean isClose() {
+        return ((SocketChannel) channel).isOpen();
+    }
+
+    public void reConnect() {
+        try {
+            SocketChannel socketChannel = SocketChannel.open();
+            socketChannel.configureBlocking(false);
+            channel = socketChannel;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        channel();
+    }
 }

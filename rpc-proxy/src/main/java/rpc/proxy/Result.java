@@ -1,6 +1,8 @@
 package rpc.proxy;
 
-public interface Result {
+import java.io.Serializable;
+
+public interface Result extends Serializable {
 
     Object getValue();
 

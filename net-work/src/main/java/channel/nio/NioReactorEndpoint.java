@@ -85,7 +85,7 @@ public class NioReactorEndpoint extends ReactorEndpoint {
                 } else if (key.isWritable()) {
                     ctx.invokerWrite();
                 } else if (key.isConnectable()) {
-//                        ctx.invokerConnect(ChannelWrapper.wrapper(key, selector));
+                    ctx.invokerCompleteConnect();
                 }
             } else {
                 try {

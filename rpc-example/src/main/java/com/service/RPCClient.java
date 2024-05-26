@@ -19,13 +19,14 @@ public class RPCClient {
 
     ChannelContext[] clientChannels;
 
-    static int GROUP_SIZE = 16;
+    static int GROUP_SIZE = 2;
     static int NEXT_ENDPOINT_INDEX_MAX = GROUP_SIZE << 8;
+
+    InetSocketAddress address = new InetSocketAddress("localhost", 80);
 
     {
         clientChannels = new ChannelContext[GROUP_SIZE];
         channelContainer = new ChannelContainer(initializer, GROUP_SIZE, null);
-        InetSocketAddress address = new InetSocketAddress("localhost", 80);
         for (int i = 0; i < clientChannels.length; i++) {
             try {
                 SocketChannel channel = SocketChannel.open();

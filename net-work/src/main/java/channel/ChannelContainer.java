@@ -41,11 +41,11 @@ public class ChannelContainer<T extends SelectableChannel> {
         boos.start();
     }
 
-    public ChannelContext<SelectableChannel> connect(InetSocketAddress address) {
+    public ChannelContext connect(InetSocketAddress address) {
         try {
             SocketChannel socketChannel = SocketChannel.open();
             socketChannel.configureBlocking(false);
-            ChannelContext<SelectableChannel> context = new ChannelContext<>(this, socketChannel);
+            ChannelContext context = new ChannelContext(this, socketChannel);
             context.connect(address);
             return context;
         } catch (IOException e) {

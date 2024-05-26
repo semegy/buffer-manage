@@ -3,9 +3,7 @@ package rpc.proxy;//
 // (powered by FernFlower decompiler)
 //
 
-import java.io.Serializable;
-
-public class AppResponse implements Result, Serializable {
+public class AppResponse implements Result {
     private static final long serialVersionUID = -6925924956850004727L;
     private Object result;
 
