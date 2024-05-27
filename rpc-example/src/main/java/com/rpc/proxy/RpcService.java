@@ -1,11 +1,11 @@
-package com.service;
+package com.rpc.proxy;
 
 import channel.ChannelContainer;
 import channel.ChannelContext;
 import channel.message.HandlerInitializer;
 import org.springframework.stereotype.Component;
-import rpc.proxy.RpcDecoder;
 
+import javax.annotation.PostConstruct;
 import java.net.InetSocketAddress;
 
 @Component
@@ -22,9 +22,9 @@ public class RpcService {
     };
 
     public RpcService() {
-        init();
     }
 
+    @PostConstruct
     public void init() {
         InetSocketAddress address = new InetSocketAddress("localhost", 80);
         ChannelContainer context = new ChannelContainer(initializer, 16, address);

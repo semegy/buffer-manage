@@ -1,5 +1,6 @@
-package com;
+package com.provider;
 
+import com.provider.service.ProviderService;
 import org.springframework.core.type.classreading.MetadataReader;
 import org.springframework.core.type.classreading.MetadataReaderFactory;
 import org.springframework.core.type.filter.TypeFilter;

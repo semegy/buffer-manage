@@ -1,4 +1,4 @@
-package com.service;
+package com.rpc.proxy;
 
 import buffer.ByteBuf;
 import channel.ChannelContext;

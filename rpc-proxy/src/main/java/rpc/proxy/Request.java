@@ -12,7 +12,7 @@ public class Request implements Serializable {
 
     int methodIndex;
 
-    Object[] params;
+    public Object[] params;
 
     public Request(String serviceName, long requestId, Object[] param, String methodName, int methodId) {
         this.requestId = requestId;

@@ -1,15 +1,18 @@
-package rpc.proxy;
+package com.rpc.proxy;
 
 import buffer.ByteBuf;
 import channel.ChannelContext;
 import channel.message.ByteToMessageDecoder;
-import com.ServiceBean;
+import com.provider.ServiceBean;
+import rpc.proxy.AppResponse;
+import rpc.proxy.DefaultFuture;
+import rpc.proxy.Request;
 import src.main.java.common.Hessian2Serialize;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import static com.ServiceBean.serviceMap;
+import static com.provider.ServiceBean.serviceMap;
 import static rpc.proxy.DefaultFuture.FUTURES;
 
 public class RpcDecoder extends ByteToMessageDecoder {
@@ -21,7 +24,7 @@ public class RpcDecoder extends ByteToMessageDecoder {
     }
 
     @Override
-    protected void handle(ChannelContext context, ByteBuf byteBuf) {
+    public void handle(ChannelContext context, ByteBuf byteBuf) {
         byte[] bytes = byteBuf.readBytes();
         Object deserialize = Hessian2Serialize.deserialize(bytes);
         if (deserialize instanceof Request) {

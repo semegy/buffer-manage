@@ -1,7 +1,4 @@
-package com.service;
-
-import com.Api;
-import com.ProviderService;
+package com.provider.service;
 
 @ProviderService
 public class ApiImpl implements Api {

@@ -1,7 +1,7 @@
 package rpc.proxy;
 
 
-import src.main.java.common.ReflectUtils;
+import common.ReflectUtils;
 
 import java.util.HashSet;
 import java.util.Set;

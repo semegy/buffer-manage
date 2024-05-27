@@ -1,4 +1,4 @@
-package com;
+package com.provider;
 
 import javax.annotation.PostConstruct;
 import java.io.Serializable;

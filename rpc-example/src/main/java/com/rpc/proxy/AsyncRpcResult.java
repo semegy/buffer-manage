@@ -1,4 +1,4 @@
-package rpc.proxy;
+package com.rpc.proxy;
 
 //
 // Source code recreated from a .class file by IntelliJ IDEA
@@ -7,6 +7,10 @@ package rpc.proxy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import rpc.proxy.AppResponse;
+import rpc.proxy.Invocation;
+import rpc.proxy.Request;
+import rpc.proxy.Result;
 
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;

@@ -7,7 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
 /**
- * @author Securitit.
+ * @author
  * @note Hessian工具类.
  */
 public class Hessian2Serialize {

@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Import;
 @SpringBootApplication
 @EnableAspectJAutoProxy(proxyTargetClass = true)
 @Import({ServiceScansRegister.class})
-@ServiceScans(basePackages = {"com.service"})
+@ServiceScans(basePackages = {"com.provider.service"})
 public class Application {
 
     public static void main(String[] args) {

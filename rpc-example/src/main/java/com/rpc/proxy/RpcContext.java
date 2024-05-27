@@ -1,4 +1,4 @@
-package rpc.proxy;
+package com.rpc.proxy;
 
 import java.util.HashMap;
 import java.util.Map;

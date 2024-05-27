@@ -1,4 +1,4 @@
-package src.main.java.common;
+package common;
 
 import javassist.CannotCompileException;
 import javassist.CtClass;

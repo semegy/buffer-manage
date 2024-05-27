@@ -1,17 +1,19 @@
-package rpc.proxy;
+package com.rpc.proxy;
 
 import channel.ChannelContext;
-import com.service.RPCClient;
+import com.cache.DefaultExecutorCache;
+import rpc.proxy.*;
 
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 
 public class AbstractInvoker<T> implements Invoker<T> {
     private URL url;
     public Class<T> interfaceClass;
 
-    public ThreadPoolExecutor executor = new ThreadPoolExecutor(0, 100000, 60, TimeUnit.MINUTES, new LinkedBlockingQueue<>());
-
+    public ExecutorService executor = new DefaultExecutorCache().getExecutor();
 
     @Override
     public URL getUrl() {

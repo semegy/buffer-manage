@@ -1,9 +1,8 @@
-package com.service;
+package com.rpc.proxy;
 
 import channel.ChannelContainer;
 import channel.ChannelContext;
 import channel.message.HandlerInitializer;
-import rpc.proxy.RpcDecoder;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;

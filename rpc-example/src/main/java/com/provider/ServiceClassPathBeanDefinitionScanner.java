@@ -1,5 +1,6 @@
-package com;
+package com.provider;
 
+import com.provider.service.ProviderService;
 import org.springframework.beans.MutablePropertyValues;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.BeanDefinitionHolder;
@@ -40,7 +41,7 @@ public class ServiceClassPathBeanDefinitionScanner extends ClassPathBeanDefiniti
     }
 
     @Override
-    protected Set<BeanDefinitionHolder> doScan(String... basePackages) {
+    public Set<BeanDefinitionHolder> doScan(String... basePackages) {
         Set<BeanDefinitionHolder> beanDefinitionHolders = super.doScan(basePackages);
         Iterator<BeanDefinitionHolder> iterator = beanDefinitionHolders.iterator();
         HashSet<BeanDefinitionHolder> newHolders = new HashSet<>();

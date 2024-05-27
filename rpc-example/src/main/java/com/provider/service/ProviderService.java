@@ -1,4 +1,4 @@
-package com;
+package com.provider.service;
 
 import java.lang.annotation.*;
 

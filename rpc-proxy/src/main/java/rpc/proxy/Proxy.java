@@ -1,11 +1,11 @@
 package rpc.proxy;
 
+import common.ReflectUtils;
 import javassist.*;
-import src.main.java.common.ReflectUtils;
 
 import java.lang.reflect.Method;
 
-import static src.main.java.common.ArgumentUtils.asArgument;
+import static common.ArgumentUtils.asArgument;
 
 public abstract class Proxy {
     public static Proxy getProxy(Class<?> ifs) {
